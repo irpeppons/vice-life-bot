@@ -135,6 +135,39 @@ async function assegnaTutti(guild) {
   return { nuovi, rinominati, saltati };
 }
 
+// Rinumera tutti in ordine di ingresso: proprietario incluso, bot esclusi
+async function rinumera(guild) {
+  const d = get(guild.id);
+  const membri = [...(await guild.members.fetch()).values()]
+    .filter((m) => !m.user.bot)
+    .sort((a, b) => (a.joinedTimestamp ?? 0) - (b.joinedTimestamp ?? 0));
+  const vecchi = d.utenti;
+  d.utenti = {};
+  membri.forEach((m, n) => { d.utenti[m.id] = { n: n + 1, gioco: vecchi[m.id]?.gioco ?? null }; });
+  d.prossimo = membri.length + 1;
+  save();
+  for (const m of membri) await applyNick(m).catch(() => {});
+  console.log(`🆔 ID rinumerati in ordine di ingresso (proprietario = ${pad(1, d.cifre)}, bot esclusi)`);
+}
+
+// All'avvio: la prima volta rinumera, poi dà l'ID a chi non ce l'ha ancora
+async function onReady(guild) {
+  const d = get(guild.id);
+  if (!d.attivo) return;
+  try {
+    if ((d.idVer ?? 1) < 2) { await rinumera(guild); d.idVer = 2; save(); return; }
+    await assegnaTutti(guild);
+  } catch (e) { console.warn(`[id] ${e.message}`); }
+}
+
+// ID del player come testo (es. 0008), per i messaggi
+function idText(member) {
+  const d = get(member.guild.id);
+  const u = d.utenti[member.id];
+  if (!u) return '?';
+  return pad(typeof u === 'number' ? u : u.n, d.cifre);
+}
+
 async function handle(i) {
   // /id [utente] -> mostra l'ID di qualcuno
   if (i.isChatInputCommand() && i.commandName === 'id') {
@@ -178,6 +211,6 @@ module.exports = {
       .setDMPermission(false).toJSON(),
   ],
   isId: (i) => (i.isChatInputCommand() && ['id', 'idfissi'].includes(i.commandName)) || /^idm?:/.test(i.customId ?? ''),
-  handle, onJoin, onUpdate,
+  handle, onJoin, onUpdate, onReady, idText,
   _panel: panel, _nickFor: nickFor, _baseName: baseName, _get: get,
 };

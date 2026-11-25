@@ -120,9 +120,12 @@ function fill(text, member, plain = false) {
     .replace(/{user}/g, plain ? member.user.username : `<@${member.id}>`)
     .replace(/{username}/g, member.user.username)
     .replace(/{server}/g, member.guild.name)
-    .replace(/{membri}/g, String(member.guild.memberCount));
+    .replace(/{membri}/g, String(cittadini(member.guild)))
+    .replace(/{id}/g, idfissi.idText(member));
 }
 const isUrl = (s) => /^https?:\/\/\S+$/i.test(s);
+// Numero di cittadini: conta le persone (anche il proprietario), NON i bot
+const cittadini = (guild) => guild.members.cache.filter((m) => !m.user.bot).size || guild.memberCount;
 const hex = (s) => { if (!s) return null; const h = s.startsWith('#') ? s : `#${s}`; return /^#[0-9a-f]{6}$/i.test(h) ? h : undefined; };
 
 function welcomeEmbed(member, w, conCard) {
@@ -175,7 +178,7 @@ async function panel(member, warning = '') {
     `${on(w.attivo)} Benvenuto **${w.attivo ? 'ATTIVO' : 'DISATTIVATO'}** • Canale: ${w.canale ? `<#${w.canale}>` : '⚠️ *non scelto*'}\n` +
     `${on(w.card.attiva)} Immagine con banner (sfondo: ${sfondo}) • ${on(w.riquadro)} Riquadro\n` +
     `🌄 Per usare **il tuo banner come sfondo**: \`/benvenuto sfondo:\` e carica l'immagine\n` +
-    `Variabili: \`{user}\` \`{username}\` \`{server}\` \`{membri}\`\n` +
+    `Variabili: \`{user}\` \`{username}\` \`{server}\` \`{membri}\` (persone, senza bot) \`{id}\` (ID fisso)\n` +
     `👇 **Anteprima** (come la vedrà il nuovo membro):` +
     (warning ? `\n\n${warning}` : '');
   const preview = await welcomeMessage(member, w);
@@ -445,6 +448,7 @@ client.once('clientReady', async () => {
     await nascondiMessaggioIngresso(g);
     await g.members.fetch().catch(() => {});
     memoria.salvaTutti(g);
+    await idfissi.onReady(g);
     if (cfg(g.id).stats) await updateStats(g);
   }
   setInterval(() => client.guilds.cache.forEach((g) => cfg(g.id).stats && scheduleStats(g)), UPDATE_EVERY_MS);
