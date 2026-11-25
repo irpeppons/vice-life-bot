@@ -6,7 +6,8 @@
 //   /ticket         -> apre il PANNELLO per creare il sistema ticket
 //   /autoruoli      -> sceglie i ruoli dati in automatico a chi entra
 //   /idfissi, /id   -> numero fisso nel nickname in base all'ordine di ingresso
-//   /annunci, /link, /sondaggi, /giveaway
+//   /annunci, /link, /link-ds, /sondaggi, /giveaway, /spoiler
+//   /stato-server   -> online / offline / manutenzione
 // ================================================
 require('dotenv').config();
 const fs = require('fs');
@@ -38,6 +39,8 @@ const memoria = require('./memoria');
 memoria.init(cfg, save);
 const community = require('./community');
 community.init(cfg, save);
+const statoServer = require('./stato');
+statoServer.init(cfg, save);
 
 // ---------- statistiche ----------
 const STATS = [
@@ -430,7 +433,7 @@ const commands = [
     .setDescription('Scegli i ruoli che ricevono in automatico i nuovi membri')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
     .setDMPermission(false),
-].map((c) => c.toJSON()).concat(tickets.command, idfissi.commands, community.commands);
+].map((c) => c.toJSON()).concat(tickets.command, idfissi.commands, community.commands, statoServer.command);
 
 // ---------- client ----------
 const client = new Client({
@@ -462,6 +465,7 @@ client.once('clientReady', async () => {
     await idfissi.onReady(g);
     await tickets.onReady(g).catch(() => {});
     await community.onReady(g).catch(() => {});
+    await statoServer.onReady(g)?.catch?.(() => {});
     if (cfg(g.id).stats) await updateStats(g);
   }
   setInterval(() => client.guilds.cache.forEach((g) => cfg(g.id).stats && scheduleStats(g)), UPDATE_EVERY_MS);
@@ -493,6 +497,8 @@ client.on('interactionCreate', async (i) => {
   try {
     // Sistema ticket
     if (tickets.isTicket(i)) return await tickets.handle(i);
+    // Stato server
+    if (statoServer.isStato(i)) return await statoServer.handle(i);
     // Annunci, link, sondaggi, giveaway
     if (community.isCommunity(i)) return await community.handle(i);
     // ID fissi
