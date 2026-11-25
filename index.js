@@ -17,6 +17,7 @@
 //   /partner        -> pubblica un server partner (solo ruolo partner manager)
 //   /lavori-info    -> info sui lavori (pubblicate da sole nel canale lavori)
 //   /offerte-info   -> info del canale offerte di lavoro
+//   /regolamento-fazioni -> regolamento fazioni legali e illegali
 // ================================================
 require('dotenv').config();
 const fs = require('fs');
@@ -61,9 +62,10 @@ storie.init(cfg, save);
 const voce = require('./voce');
 voce.init(cfg, save);
 const partner = require('./partner');
-const { lavori, offerte } = require('./info');
+const { lavori, offerte, regFazioni } = require('./info');
 lavori.init(cfg, save);
 offerte.init(cfg, save);
+regFazioni.init(cfg, save);
 
 // ---------- statistiche ----------
 const STATS = [
@@ -461,7 +463,7 @@ const commands = [
     .setDescription('Scegli i ruoli che ricevono in automatico i nuovi membri')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
     .setDMPermission(false),
-].map((c) => c.toJSON()).concat(tickets.command, idfissi.commands, community.commands, statoServer.command, wl.command, richiestaWl.command, esitoWl.command, storie.command, voce.command, partner.command, lavori.command, offerte.command);
+].map((c) => c.toJSON()).concat(tickets.command, idfissi.commands, community.commands, statoServer.command, wl.command, richiestaWl.command, esitoWl.command, storie.command, voce.command, partner.command, lavori.command, offerte.command, regFazioni.command);
 
 // ---------- client ----------
 const client = new Client({
@@ -501,6 +503,7 @@ client.once('clientReady', async () => {
     await voce.onReady(g).catch(() => {});
     await lavori.onReady(g)?.catch?.(() => {});
     await offerte.onReady(g)?.catch?.(() => {});
+    await regFazioni.onReady(g)?.catch?.(() => {});
     if (cfg(g.id).stats) await updateStats(g);
   }
   setInterval(() => client.guilds.cache.forEach((g) => cfg(g.id).stats && scheduleStats(g)), UPDATE_EVERY_MS);
@@ -538,6 +541,7 @@ client.on('interactionCreate', async (i) => {
     // Info lavori
     if (lavori.is(i)) return await lavori.handle(i);
     if (offerte.is(i)) return await offerte.handle(i);
+    if (regFazioni.is(i)) return await regFazioni.handle(i);
     // Partnership
     if (partner.isPartner(i)) return await partner.handle(i);
     // Prova audio sala d'attesa

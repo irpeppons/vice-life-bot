@@ -207,4 +207,45 @@ const offerte = creaInfo({
   ],
 });
 
-module.exports = { creaInfo, lavori, offerte };
+// ---------- REGOLAMENTO FAZIONI ----------
+const regFazioni = creaInfo({
+  chiave: 'regFazioni',
+  prefisso: 'rf',
+  comando: 'regolamento-fazioni',
+  descrizioneComando: 'Modifica il regolamento delle fazioni legali e illegali',
+  nome: '⚖️ Regolamento Fazioni – VICE LIFE🌴',
+  canale: '1575154020656349314',
+  footer: 'VICE LIFE RP 🌴 • Regolamento fazioni',
+  sezioni: [
+    {
+      titolo: '⚖️ REGOLAMENTO FAZIONI – VICE LIFE RP',
+      testo: 'Questo regolamento vale per **tutte le fazioni**, legali e illegali, e si aggiunge al **regolamento generale** del server.\nEntrando in una fazione **accetti** queste regole. Non conoscerle **non è una scusa**. 📜',
+    },
+    {
+      titolo: '📌 Regole generali',
+      testo: '1. Si può far parte di **una sola fazione** alla volta (legale **o** illegale)\n2. Ogni fazione ha un **capo** responsabile del comportamento dei suoi membri\n3. Le fazioni si creano solo con l\'**approvazione dello staff**\n4. Per lasciare una fazione serve un **motivo RP** e un passaggio di consegne\n5. Vietato passare **informazioni OOC** tra fazioni (Discord, live, amici)\n6. Vietato **abusare** di armi, mezzi, soldi o oggetti della fazione\n7. Rispetta sempre **Fear RP**, **valore della vita** e **NLR**',
+    },
+    {
+      titolo: '🚓 Fazioni legali',
+      testo: '_Polizia, Ospedale/EMS, Governo, Giustizia e aziende ufficiali_\n1. In servizio indossa sempre la **divisa** e usa i **mezzi di servizio**\n2. Segui la **gerarchia** e gli ordini dei superiori\n3. Vietato usare il ruolo per **interessi personali** (corruzione solo se approvata dallo staff come RP)\n4. Vietato **collaborare** con fazioni illegali senza un vero motivo RP\n5. Polizia: usa la **forza giusta** per la situazione, rispetta i diritti del fermato\n6. EMS: **soccorri tutti**, senza scegliere chi aiutare\n7. I mezzi di fazione non si usano **fuori servizio**',
+    },
+    {
+      titolo: '🕶️ Fazioni illegali',
+      testo: '_Gang, famiglie, cartelli e organizzazioni criminali_\n1. Serve una **storia** credibile della fazione, approvata dallo staff\n2. Massimo **membri** per fazione deciso dallo staff\n3. Le azioni criminali devono avere un **motivo RP**: niente violenza a caso\n4. Vietato attaccare **zone sicure** (ospedale, comune, centrali) senza permesso staff\n5. Rapine e sequestri: rispetta il **numero minimo di poliziotti** in servizio\n6. Vietato **uccidere ostaggi** che collaborano\n7. Gli **ostaggi** non possono essere amici o membri della stessa fazione',
+    },
+    {
+      titolo: '⚔️ Guerre e conflitti tra fazioni',
+      testo: '1. Una **guerra** va dichiarata e **approvata dallo staff** prima di iniziare\n2. Serve un **motivo RP** serio e una serie di eventi che la giustifichino\n3. Vietato attaccare membri di una fazione **appena entrati in città** o **appena morti** (NLR)\n4. Niente **campeggio** sotto le sedi delle altre fazioni\n5. Quando lo staff dichiara **fine guerra**, le ostilità si fermano subito',
+    },
+    {
+      titolo: '🚫 Sanzioni',
+      testo: 'Chi non rispetta il regolamento può ricevere, in base alla gravità:\n⚠️ **Richiamo** (Richiamo I e II)\n🔒 **Sospensione** dalla fazione\n⛔ **Espulsione** dalla fazione o **chiusura** dell\'intera fazione\n🔨 **Ban** temporaneo o permanente dal server\n\nIl **capo fazione** può essere sanzionato insieme ai membri se non li controlla.',
+    },
+    {
+      titolo: '❓ Dubbi e segnalazioni',
+      testo: 'Hai un dubbio sul regolamento o vuoi segnalare una fazione che non lo rispetta?\nApri un **ticket** con prove (video o screenshot).\n\n📌 Lo staff può modificare questo regolamento in qualsiasi momento: controllalo spesso!',
+    },
+  ],
+});
+
+module.exports = { creaInfo, lavori, offerte, regFazioni };
