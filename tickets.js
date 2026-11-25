@@ -45,6 +45,8 @@ const DEFAULT_STAFF = [
   '1575142910888906862', '1575143071564304454', '1575143178414063649', '1575143272404357200',
   '1575143396572528722', '1575144009914122242', '1575144054608502915', '1575144091333824512',
   '1575144154814480496', '1575144181167554671', '1575144207906250842', '1575144231134040104',
+  '1575144400399499304', '1575144537926672455', '1575144590724304917', '1575144642565898330',
+  '1575144673981501630', '1575144703987294369', '1575144736015261774',
 ];
 function get(gid) {
   const t = (cfg(gid).tickets ??= structuredClone(DEFAULT));
@@ -54,9 +56,9 @@ function get(gid) {
     t.bannerVer = 2;
     save?.();
   }
-  if ((t.staffVer ?? 1) < 3) { // rimette sempre tutti i 12 ruoli staff ufficiali
+  if ((t.staffVer ?? 1) < 4) { // rimette sempre tutti i 12 ruoli staff ufficiali
     t.staff = [...new Set([...DEFAULT_STAFF, ...(t.staff ?? []).filter((r) => r !== '1575143684528279654')])];
-    t.staffVer = 3;
+    t.staffVer = 4;
     save?.();
   }
   if ((t.staffVer ?? 1) < 2) { // correzione staff: +1575144181167554671, -1575143684528279654
