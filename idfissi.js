@@ -118,6 +118,7 @@ async function onUpdate(oldM, newM) {
   const ruoliCambiati = !oldM.roles?.cache || oldM.roles.cache.size !== newM.roles.cache.size
     || oldM.roles.cache.some((r) => !newM.roles.cache.has(r.id));
   if (oldM.nickname === newM.nickname && !ruoliCambiati) return;
+  if (/^\d+ \| /.test(newM.nickname ?? '')) return; // ha il numero della fila d'attesa: lo gestisce voce.js
   if (esente(newM)) { await togliNumero(newM).catch(() => {}); return; } // diventato staff
   const u = idOf(newM, ruoliCambiati); // non è più staff: riprende/riceve l'ID
   if (!u) return;

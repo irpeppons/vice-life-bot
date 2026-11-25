@@ -28,11 +28,54 @@ function libVoce() {
 }
 
 const inCorso = new Set();      // player che stanno ascoltando l'audio
+const inAttesaAudio = new Set(); // player in coda per sentire l'audio
 const rientri = new Set();      // player che il bot sta riportando nell'attesa (da non rifare)
 const coda = new Map();         // una riproduzione alla volta per server
 const attivi = new Map();       // player -> { temp, player, uscito } mentre sente l'audio
-const ultimaVolta = new Map();  // player -> quando ha sentito l'audio (per non ripeterlo di continuo)
-const PAUSA_RIPETIZIONE_MS = 3 * 60 * 1000; // non lo rifà allo stesso player prima di 3 minuti
+
+// ---------- FILA: numero davanti al nome finché resta in attesa ----------
+const PREFISSO = /^\d+ \| /;            // es. "1 | irPEPPON$ [0002]"
+const file = new Map();                   // server -> [id dei player in ordine di arrivo]
+const catene = new Map();                 // una modifica dei nickname alla volta
+const fila = (gid) => (file.has(gid) ? file.get(gid) : file.set(gid, []).get(gid));
+const senzaNumero = (nick) => (nick ?? '').replace(PREFISSO, '');
+const rinominabile = (m) => m && m.manageable && m.id !== m.guild.ownerId;
+
+async function metti_nick(m, nick) {
+  if (!rinominabile(m)) return;
+  const nuovo = nick && nick !== (m.user.globalName ?? m.user.username) ? nick.slice(0, 32) : null;
+  if ((m.nickname ?? null) !== nuovo) await m.setNickname(nuovo, 'Fila attesa assistenza').catch(() => {});
+}
+
+// Rimette i numeri giusti a tutti quelli in fila (1 = arrivato per primo)
+function aggiornaFila(guild, tolto = null) {
+  const prima = catene.get(guild.id) ?? Promise.resolve();
+  const dopo = prima.then(async () => {
+    if (tolto) await metti_nick(tolto, senzaNumero(tolto.nickname ?? tolto.displayName));
+    const lista = fila(guild.id);
+    for (let n = 0; n < lista.length; n++) {
+      const m = guild.members.cache.get(lista[n]);
+      if (!m) continue;
+      const base = senzaNumero(m.nickname ?? m.displayName);
+      const voluto = `${n + 1} | ${base}`;
+      if (m.nickname !== voluto) await metti_nick(m, voluto);
+    }
+  }).catch(() => {});
+  catene.set(guild.id, dopo);
+  return dopo;
+}
+
+function entraInFila(member) {
+  const lista = fila(member.guild.id);
+  if (!lista.includes(member.id)) { lista.push(member.id); aggiornaFila(member.guild); }
+}
+function esceDallaFila(member) {
+  const lista = fila(member.guild.id);
+  const i = lista.indexOf(member.id);
+  if (i === -1) return;
+  lista.splice(i, 1);
+  aggiornaFila(member.guild, member);
+}
 const temporanei = (gid) => (cfg(gid).canaliAudio ??= []);
 
 
@@ -45,7 +88,6 @@ async function riproduci(member) {
   const stato = { uscito: false, player: null, temp: null };
   inCorso.add(member.id);
   attivi.set(member.id, stato);
-  ultimaVolta.set(member.id, Date.now());
   try {
     // 1) canale privato: solo il player e il bot
     const perms = [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect, PermissionFlagsBits.Speak];
@@ -108,6 +150,10 @@ async function riproduci(member) {
 function onVoiceUpdate(oldState, newState) {
   const member = newState.member;
   if (!member || member.user.bot) return;
+  // Fila: entra quando arriva in attesa, esce quando va da un'altra parte (il canale privato dell'audio non conta)
+  const tempAudio = attivi.get(member.id)?.temp;
+  if (newState.channelId === CANALE_ATTESA) entraInFila(member);
+  else if (!(tempAudio && newState.channelId === tempAudio)) esceDallaFila(member);
   // Se esce (o cambia canale) mentre sente l'audio: stop subito, il bot non lo riprende
   const a = attivi.get(member.id);
   if (a && newState.channelId !== a.temp && (oldState.channelId === a.temp || newState.channelId !== CANALE_ATTESA)) {
@@ -116,9 +162,9 @@ function onVoiceUpdate(oldState, newState) {
     return;
   }
   if (newState.channelId !== CANALE_ATTESA || oldState.channelId === CANALE_ATTESA) return;
-  if (rientri.has(member.id) || inCorso.has(member.id)) return; // è il bot che lo sta riportando
-  const ultima = ultimaVolta.get(member.id);
-  if (ultima && Date.now() - ultima < PAUSA_RIPETIZIONE_MS) return; // l'ha già sentito da poco
+  if (rientri.has(member.id)) return; // è il bot che lo sta riportando
+  if (inAttesaAudio.has(member.id)) return; // è già in coda per sentirlo
+  if (inCorso.has(member.id) && !attivi.get(member.id)?.uscito) return; // lo sta già sentendo
   if (!fs.existsSync(AUDIO)) { console.warn('[audio] File audio mancante: audio/attesa-assistenza.ogg'); return; }
   console.log(`🔊 ${member.user.username} è entrato in attesa: gli faccio sentire l'audio`);
   metti(member);
@@ -127,17 +173,25 @@ function onVoiceUpdate(oldState, newState) {
 // una riproduzione alla volta: gli altri aspettano il loro turno
 function metti(member) {
   const gid = member.guild.id;
+  inAttesaAudio.add(member.id);
   const prima = coda.get(gid) ?? Promise.resolve();
-  const dopo = prima.then(() => riproduci(member)).catch(() => {});
+  const dopo = prima.then(() => { inAttesaAudio.delete(member.id); return riproduci(member); }).catch(() => {});
   coda.set(gid, dopo);
 }
 
-// All'avvio cancella eventuali canali temporanei rimasti (es. bot spento a metà)
+// All'avvio cancella eventuali canali temporanei rimasti, toglie i numeri rimasti
+// e rifà la fila con chi è già in attesa
 async function onReady(guild) {
   const lista = temporanei(guild.id);
   for (const id of [...lista]) await guild.channels.cache.get(id)?.delete().catch(() => {});
   cfg(guild.id).canaliAudio = [];
   save();
+  const inAttesa = guild.channels.cache.get(CANALE_ATTESA)?.members;
+  for (const m of guild.members.cache.values()) {
+    if (PREFISSO.test(m.nickname ?? '') && !inAttesa?.has(m.id)) await metti_nick(m, senzaNumero(m.nickname));
+  }
+  file.set(guild.id, [...(inAttesa?.values() ?? [])].filter((m) => !m.user.bot).map((m) => m.id));
+  await aggiornaFila(guild);
 }
 
 // /test-audio: per provare l'audio anche se sei staff (devi essere nel canale d'attesa)
@@ -155,6 +209,6 @@ async function handle(i) {
 
 module.exports = {
   init(cfgFn, saveFn) { cfg = cfgFn; save = saveFn; },
-  onVoiceUpdate, onReady, libVoce, command, handle,
+  onVoiceUpdate, onReady, libVoce, command, handle, PREFISSO,
   isVoce: (i) => i.isChatInputCommand() && i.commandName === 'test-audio',
 };

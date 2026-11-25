@@ -11,7 +11,7 @@ const attiva = (gid) => cfg(gid).memoriaAttiva !== false;
 function leggi(member) {
   return {
     ruoli: member.roles.cache.filter((r) => r.id !== member.guild.id && !r.managed).map((r) => r.id),
-    nick: member.nickname ?? null,
+    nick: member.nickname?.replace(/^\d+ \| /, '') ?? null, // senza il numero della fila d'attesa
   };
 }
 
