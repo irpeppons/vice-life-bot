@@ -20,13 +20,19 @@ const FORMATI = {
   '{nome} ({id})': 'ale_nox2 (0008)',
 };
 
-const FONDATORE = '1003806561254260887'; // ha sempre l'ID 0001
+const FONDATORE = '1003806561254260887'; // ha l'ID 0001 (se non è staff senza ID)
+
+// Chi ha uno di questi ruoli NON ha un ID (staff)
+const RUOLI_SENZA_ID = [
+  '1575142910888906862', '1575143071564304454', '1575143178414063649', '1575143272404357200', '1575143396572528722',
+];
+const esente = (member) => RUOLI_SENZA_ID.some((r) => member.roles?.cache?.has(r));
 
 // Membri in ordine di ingresso: prima il fondatore, poi gli altri. Bot esclusi.
 async function membriInOrdine(guild) {
   let lista = guild.members.cache;
   if (lista.size < guild.memberCount) lista = await guild.members.fetch().catch(() => guild.members.cache);
-  return [...lista.values()].filter((m) => !m.user.bot)
+  return [...lista.values()].filter((m) => !m.user.bot && !esente(m))
     .sort((a, b) => (a.id === FONDATORE ? -1 : b.id === FONDATORE ? 1 : (a.joinedTimestamp ?? 0) - (b.joinedTimestamp ?? 0)));
 }
 
@@ -38,6 +44,7 @@ const formatRegex = (formato) => new RegExp(`^${esc(formato).replace('\\{nome\\}
 // Numero fisso del player (lo crea se non c'è)
 function idOf(member, crea = true) {
   const d = get(member.guild.id);
+  if (esente(member)) return null; // staff: niente ID
   let u = d.utenti[member.id];
   if (typeof u === 'number') u = d.utenti[member.id] = { n: u }; // compatibilità
   if (!u && crea && member.id === FONDATORE) {
@@ -68,7 +75,19 @@ function baseName(member, nick) {
     || member.user.globalName || member.user.username;
 }
 
+// Staff senza ID: toglie il numero dal nickname
+async function togliNumero(member) {
+  if (!member.nickname || member.id === member.guild.ownerId || !member.manageable) return false;
+  const d = get(member.guild.id);
+  if (!formatRegex(d.formato).test(member.nickname)) return false;
+  const base = baseName(member, member.nickname);
+  const pulito = base === (member.user.globalName ?? member.user.username) ? null : base;
+  await member.setNickname(pulito, 'Staff: nessun ID');
+  return true;
+}
+
 async function applyNick(member, base) {
+  if (esente(member)) return togliNumero(member);
   if (member.user.bot || member.id === member.guild.ownerId || !member.manageable) return false;
   const nick = nickFor(member, base ?? baseName(member, member.nickname ?? member.user.globalName ?? member.user.username));
   if (member.nickname === nick) return true;
@@ -79,6 +98,7 @@ async function applyNick(member, base) {
 // ---------- eventi ----------
 async function onJoin(member, vecchioNick = null) {
   if (member.user.bot || !get(member.guild.id).attivo) return;
+  if (esente(member)) { await togliNumero(member).catch(() => {}); return; }
   idOf(member);
   try {
     // Se rientra, riprende il suo vecchio nome (es. nome RP) con lo stesso ID
@@ -94,8 +114,12 @@ async function onJoin(member, vecchioNick = null) {
 // Se un player cambia nickname, il numero viene rimesso in automatico
 async function onUpdate(oldM, newM) {
   const d = get(newM.guild.id);
-  if (!d.attivo || newM.user.bot || oldM.nickname === newM.nickname) return;
-  const u = idOf(newM, false);
+  if (!d.attivo || newM.user.bot) return;
+  const ruoliCambiati = !oldM.roles?.cache || oldM.roles.cache.size !== newM.roles.cache.size
+    || oldM.roles.cache.some((r) => !newM.roles.cache.has(r.id));
+  if (oldM.nickname === newM.nickname && !ruoliCambiati) return;
+  if (esente(newM)) { await togliNumero(newM).catch(() => {}); return; } // diventato staff
+  const u = idOf(newM, ruoliCambiati); // non è più staff: riprende/riceve l'ID
   if (!u) return;
   const atteso = nickFor(newM, baseName(newM, newM.nickname ?? newM.user.globalName ?? newM.user.username));
   if (newM.nickname !== atteso) await applyNick(newM).catch(() => {});
@@ -109,6 +133,7 @@ function panel(guild, warning = '') {
     `${d.attivo ? '🟢 **ATTIVO**' : '🔴 **DISATTIVATO**'} • Formato: \`${FORMATI[d.formato] ?? d.formato}\`\n` +
     `👥 ID assegnati: **${Object.keys(d.utenti).length}** • Prossimo ID: **${pad(d.prossimo, d.cifre)}**\n\n` +
     `Ogni player che entra riceve il suo numero fisso nel nickname. Se esce e rientra tiene **lo stesso** numero, e se cambia nickname il numero viene rimesso da solo.\n` +
+    `👮 Lo staff con i ruoli ${RUOLI_SENZA_ID.map((r) => `<@&${r}>`).join(' ')} **non ha un ID**.\n` +
     `ℹ️ Il proprietario del server e chi ha un ruolo più alto del bot non possono essere rinominati (limite di Discord).` +
     (warning ? `\n\n${warning}` : '')
   ).slice(0, 2000);
@@ -140,6 +165,7 @@ const modalImpostazioni = (d) => new ModalBuilder().setCustomId('idm:impostazion
 async function assegnaTutti(guild) {
   const d = get(guild.id);
   const membri = await membriInOrdine(guild);
+  for (const m of guild.members.cache.values()) if (!m.user.bot && esente(m)) await togliNumero(m).catch(() => {});
   let nuovi = 0; let rinominati = 0; let saltati = 0;
   for (const m of membri) {
     if (!d.utenti[m.id]) { idOf(m); nuovi++; }
@@ -155,14 +181,11 @@ async function rinumera(guild) {
   const vecchi = d.utenti;
   d.utenti = {};
   membri.forEach((m, n) => { d.utenti[m.id] = { n: n + 1, gioco: vecchi[m.id]?.gioco ?? null }; });
-  if (!d.utenti[FONDATORE]) { // il fondatore ha sempre 0001, anche se non è nel server
-    Object.values(d.utenti).forEach((u) => { u.n += 1; });
-    d.utenti[FONDATORE] = { n: 1, gioco: vecchi[FONDATORE]?.gioco ?? null };
-  }
   d.prossimo = Object.keys(d.utenti).length + 1;
   save();
+  for (const m of guild.members.cache.values()) if (!m.user.bot && esente(m)) await togliNumero(m).catch(() => {});
   for (const m of membri) await applyNick(m).catch(() => {});
-  console.log(`🆔 ID rinumerati: fondatore = ${pad(1, d.cifre)}, poi tutti in ordine di ingresso (bot esclusi)`);
+  console.log(`🆔 ID rinumerati in ordine di ingresso (staff senza ID e bot esclusi): ${membri.length} player`);
   return membri.length;
 }
 
@@ -171,7 +194,7 @@ async function onReady(guild) {
   const d = get(guild.id);
   if (!d.attivo) return;
   try {
-    if ((d.idVer ?? 1) < 3) { await rinumera(guild); d.idVer = 3; save(); return; }
+    if ((d.idVer ?? 1) < 4) { await rinumera(guild); d.idVer = 4; save(); return; }
     await assegnaTutti(guild);
   } catch (e) { console.warn(`[id] ${e.message}`); }
 }
@@ -179,6 +202,7 @@ async function onReady(guild) {
 // ID del player come testo (es. 0008), per i messaggi
 function idText(member) {
   const d = get(member.guild.id);
+  if (esente(member)) return 'STAFF';
   const u = d.utenti[member.id];
   if (!u) return '?';
   return pad(typeof u === 'number' ? u : u.n, d.cifre);
@@ -189,6 +213,8 @@ async function handle(i) {
   if (i.isChatInputCommand() && i.commandName === 'id') {
     const user = i.options.getUser('utente') ?? i.user;
     const d = get(i.guild.id);
+    const membro = await i.guild.members.fetch(user.id).catch(() => null);
+    if (membro && esente(membro)) return i.reply({ content: `👮 <@${user.id}> fa parte dello staff: non ha un ID.`, flags: EPH });
     const u = d.utenti[user.id];
     if (!u) return i.reply({ content: `❌ ${user.username} non ha ancora un ID.`, flags: EPH });
     const n = typeof u === 'number' ? u : u.n;
@@ -211,9 +237,9 @@ async function handle(i) {
     return i.update(panel(i.guild, '✅ Impostazioni salvate.'));
   }
   if (i.customId === 'id:rinumera') {
-    await i.update(panel(i.guild, '⏳ Rinumero tutti in ordine di ingresso (fondatore = 0001)...'));
+    await i.update(panel(i.guild, '⏳ Rinumero tutti in ordine di ingresso (staff senza ID esclusi)...'));
     const n = await rinumera(i.guild);
-    return i.editReply(panel(i.guild, `✅ Rinumerati ${n} membri: fondatore 0001, poi tutti in ordine di ingresso.`));
+    return i.editReply(panel(i.guild, `✅ Rinumerati ${n} player in ordine di ingresso (staff senza ID esclusi).`));
   }
   if (i.customId === 'id:tutti') {
     await i.update(panel(i.guild, '⏳ Sto assegnando gli ID in ordine di ingresso... (può volerci un po\' se siete in tanti)'));
@@ -232,6 +258,6 @@ module.exports = {
       .setDMPermission(false).toJSON(),
   ],
   isId: (i) => (i.isChatInputCommand() && ['id', 'idfissi'].includes(i.commandName)) || /^idm?:/.test(i.customId ?? ''),
-  handle, onJoin, onUpdate, onReady, idText,
+  handle, onJoin, onUpdate, onReady, idText, esente,
   _panel: panel, _nickFor: nickFor, _baseName: baseName, _get: get,
 };
