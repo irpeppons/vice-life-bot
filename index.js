@@ -457,6 +457,7 @@ client.once('clientReady', async () => {
     await g.members.fetch().catch(() => {});
     memoria.salvaTutti(g);
     await idfissi.onReady(g);
+    await tickets.onReady(g).catch(() => {});
     if (cfg(g.id).stats) await updateStats(g);
   }
   setInterval(() => client.guilds.cache.forEach((g) => cfg(g.id).stats && scheduleStats(g)), UPDATE_EVERY_MS);

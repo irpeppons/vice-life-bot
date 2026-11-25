@@ -7,7 +7,14 @@ const {
   ChannelType, PermissionFlagsBits, MessageFlags, EmbedBuilder, SlashCommandBuilder,
   ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder,
   ChannelSelectMenuBuilder, RoleSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle,
+  AttachmentBuilder,
 } = require('discord.js');
+const path = require('path');
+
+// Banner ufficiale del pannello ticket (dentro la cartella del bot)
+const BANNER_TICKET = path.join(__dirname, 'banner-ticket.jpg');
+const usaBanner = (t) => t.immagine === 'vicelife';
+const bannerFiles = (t) => (usaBanner(t) ? [new AttachmentBuilder(BANNER_TICKET, { name: 'banner-ticket.jpg' })] : []);
 
 const EPH = MessageFlags.Ephemeral;
 let cfg; let save;
@@ -20,7 +27,7 @@ const DEFAULT = {
   descrizione: 'Hai bisogno di aiuto? Apri un ticket scegliendo il tipo qui sotto 👇\n\nUno staffer ti risponderà il prima possibile.',
   footer: 'VICE LIFE🌴 • Sistema ticket',
   colore: '#ff2d95',
-  immagine: '',
+  immagine: 'vicelife',
   miniatura: 'server',
   modalita: 'pulsanti', // 'pulsanti' oppure 'menu'
   placeholder: '📩 Scegli il tipo di ticket',
@@ -42,6 +49,11 @@ const DEFAULT_STAFF = [
 function get(gid) {
   const t = (cfg(gid).tickets ??= structuredClone(DEFAULT));
   t.staff ??= [...DEFAULT_STAFF];
+  if ((t.bannerVer ?? 1) < 2) { // banner ufficiale VICE LIFE TICKET sul pannello
+    t.immagine = 'vicelife';
+    t.bannerVer = 2;
+    save?.();
+  }
   if ((t.staffVer ?? 1) < 2) { // correzione staff: +1575144181167554671, -1575143684528279654
     t.staff = [...new Set([...t.staff.filter((r) => r !== '1575143684528279654'), '1575144181167554671'])];
     t.staffVer = 2;
@@ -78,7 +90,8 @@ function publicEmbed(guild, t) {
   if (t.titolo) e.setTitle(t.titolo.slice(0, 256));
   if (t.miniatura === 'server' && guild.iconURL()) e.setThumbnail(guild.iconURL({ size: 256 }));
   else if (isUrl(t.miniatura)) e.setThumbnail(t.miniatura);
-  if (isUrl(t.immagine)) e.setImage(t.immagine);
+  if (usaBanner(t)) e.setImage('attachment://banner-ticket.jpg');
+  else if (isUrl(t.immagine)) e.setImage(t.immagine);
   if (t.footer) e.setFooter({ text: t.footer.slice(0, 2048), iconURL: guild.iconURL() ?? undefined });
   return e;
 }
@@ -106,7 +119,9 @@ function publicComponents(t) {
   return rows;
 }
 
-const publicMessage = (guild, t) => ({ embeds: [publicEmbed(guild, t)], components: publicComponents(t) });
+const publicMessage = (guild, t) => ({
+  embeds: [publicEmbed(guild, t)], components: publicComponents(t), files: bannerFiles(t), attachments: [],
+});
 
 // Aggiorna da solo il pannello già pubblicato dopo ogni modifica
 async function refreshPublished(guild) {
@@ -161,7 +176,7 @@ function adminPanel(guild, warning = '') {
       return sel;
     })()),
   );
-  return { content, embeds: [publicEmbed(guild, t)], components };
+  return { content, embeds: [publicEmbed(guild, t)], components, files: bannerFiles(t), attachments: [] };
 }
 
 function tipoPanel(guild, tipo, warning = '') {
@@ -184,7 +199,7 @@ function tipoPanel(guild, tipo, warning = '') {
   if (validRoles.length) ruoli.setDefaultRoles(...validRoles);
 
   return {
-    content, embeds: [],
+    content, embeds: [], files: [], attachments: [],
     components: [
       new ActionRowBuilder().addComponents(cat),
       new ActionRowBuilder().addComponents(ruoli),
@@ -206,7 +221,7 @@ const modalTesti = (t) => new ModalBuilder().setCustomId('tkm:testi').setTitle('
 );
 const modalStile = (t) => new ModalBuilder().setCustomId('tkm:stile').setTitle('🎨 Colore & Immagini').addComponents(
   input('colore', 'Colore (codice HEX)', t.colore, { max: 7, placeholder: '#ff2d95' }),
-  input('immagine', 'Immagine grande / banner (link)', t.immagine, { max: 1000, placeholder: 'https://... (vuoto = nessuna)' }),
+  input('immagine', 'Banner: vicelife / link / vuoto', t.immagine, { max: 1000, placeholder: 'vicelife = banner ufficiale VICE LIFE TICKET' }),
   input('miniatura', 'Miniatura: server / link / vuoto', t.miniatura, { max: 1000, placeholder: 'server' }),
 );
 const modalTipo = (tipo) => new ModalBuilder().setCustomId(tipo ? `tkm:edit:${tipo.id}` : 'tkm:add')
@@ -295,7 +310,8 @@ async function handleAdmin(i) {
         if (/^#[0-9a-f]{6}$/i.test(colore)) t.colore = colore; else errori.push('colore non valido (usa tipo `#ff2d95`)');
       }
       const img = v('immagine');
-      if (!img || isUrl(img)) t.immagine = img; else errori.push('link immagine non valido');
+      if (!img || isUrl(img) || img.toLowerCase() === 'vicelife') t.immagine = img.toLowerCase() === 'vicelife' ? 'vicelife' : img;
+      else errori.push('banner non valido (scrivi vicelife, un link o lascia vuoto)');
       const mini = v('miniatura').toLowerCase() === 'server' ? 'server' : v('miniatura');
       if (!mini || mini === 'server' || isUrl(mini)) t.miniatura = mini; else errori.push('miniatura non valida');
       return done(errori.length ? `⚠️ Salvato, ma: ${errori.join(', ')}.` : '✅ Stile aggiornato.');
@@ -406,6 +422,8 @@ async function handlePublic(i) {
 // ---------- export ----------
 module.exports = {
   init(cfgFn, saveFn) { cfg = cfgFn; save = saveFn; },
+  // All'avvio aggiorna il pannello pubblicato (es. nuovo banner)
+  async onReady(guild) { if (cfg(guild.id).tickets) { get(guild.id); await refreshPublished(guild); } },
   command: new SlashCommandBuilder()
     .setName('ticket')
     .setDescription('Apri il pannello per creare e gestire il sistema ticket')
