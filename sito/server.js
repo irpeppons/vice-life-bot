@@ -26,7 +26,13 @@ const TIPI = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=u
 function leggiContenuti() {
   fs.mkdirSync(DATI, { recursive: true });
   if (!fs.existsSync(FILE_CONTENUTI)) fs.copyFileSync(path.join(CARTELLA, 'predefiniti.json'), FILE_CONTENUTI);
-  return JSON.parse(fs.readFileSync(FILE_CONTENUTI, 'utf8'));
+  const c = JSON.parse(fs.readFileSync(FILE_CONTENUTI, 'utf8'));
+  // se il link Discord era ancora quello vuoto, mette l'invito ufficiale
+  if (c.generale && (!c.generale.linkDiscord || c.generale.linkDiscord === 'https://discord.gg/')) {
+    c.generale.linkDiscord = 'https://discord.gg/kBN5EjxNZ3';
+    fs.writeFileSync(FILE_CONTENUTI, JSON.stringify(c, null, 2));
+  }
+  return c;
 }
 function salvaContenuti(c) {
   fs.mkdirSync(DATI, { recursive: true });
