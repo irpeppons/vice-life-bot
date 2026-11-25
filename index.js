@@ -89,6 +89,8 @@ const DEFAULT_WELCOME = {
   card: { ...DEFAULT_CARD },
 };
 const LAYOUTS = {
+  'profilo-cerchio': '🖼️ Banner sopra, nome sotto (tondo)',
+  'profilo-quadrato': '🖼️ Banner sopra, nome sotto (quadrato)',
   'centro-cerchio': '🟣 Avatar al centro (tondo)',
   'centro-quadrato': '🟪 Avatar al centro (quadrato)',
   'sinistra-cerchio': '⬅️ Avatar a sinistra (tondo)',
@@ -103,6 +105,12 @@ function getWelcome(guildId) {
   if (w.messaggio !== undefined && w.descrizione === undefined) { // vecchio formato
     c.welcome = { ...DEFAULT_WELCOME, attivo: true, canale: w.canale, descrizione: w.messaggio,
       titolo: w.titolo || DEFAULT_WELCOME.titolo, colore: w.colore || DEFAULT_WELCOME.colore, immagine: w.immagine || '' };
+    save();
+  }
+  if ((c.welcome.cardVer ?? 1) < 2) { // nuova immagine: banner VICE LIFE sopra, nome e cittadino sotto
+    c.welcome.card = { ...(c.welcome.card || {}), sfondo: 'vicelife', layout: 'profilo', forma: 'cerchio', oscuramento: 0,
+      riga1: '{username}', riga2: 'Sei il cittadino n° {membri}', riga3: '', attiva: true };
+    c.welcome.cardVer = 2;
     save();
   }
   return { ...DEFAULT_WELCOME, ...c.welcome, card: { ...DEFAULT_CARD, ...(c.welcome.card || {}) } };
@@ -172,7 +180,7 @@ async function sendWelcome(member, force = false) {
 async function panel(member, warning = '') {
   const w = getWelcome(member.guild.id);
   const on = (b) => (b ? '🟢' : '🔴');
-  const sfondo = w.card.sfondo === 'file' ? 'immagine caricata' : w.card.sfondo ? 'link' : 'sfumatura colorata';
+  const sfondo = { file: 'immagine caricata', vicelife: 'banner VICE LIFE', '': 'sfumatura colorata' }[w.card.sfondo] ?? 'link';
   const header =
     `## 🌴 Pannello Benvenuto – ${BOT_NAME}\n` +
     `${on(w.attivo)} Benvenuto **${w.attivo ? 'ATTIVO' : 'DISATTIVATO'}** • Canale: ${w.canale ? `<#${w.canale}>` : '⚠️ *non scelto*'}\n` +
@@ -239,14 +247,14 @@ const modalStile = (w) => new ModalBuilder().setCustomId('wbm:stile').setTitle('
 );
 
 const modalCardTesti = (c) => new ModalBuilder().setCustomId('wbm:cardtesti').setTitle('🖼️ Scritte sull\'immagine').addComponents(
-  input('riga1', 'Riga 1 (grande)', c.riga1, TextInputStyle.Short, 60, 'BENVENUTO/A'),
-  input('riga2', 'Riga 2 (colorata)', c.riga2, TextInputStyle.Short, 60, '{username}'),
-  input('riga3', 'Riga 3 (piccola)', c.riga3, TextInputStyle.Short, 80, 'Sei il cittadino n° {membri}'),
+  input('riga1', 'Riga 1 (grande)', c.riga1, TextInputStyle.Short, 60, '{username}'),
+  input('riga2', 'Riga 2 (colorata)', c.riga2, TextInputStyle.Short, 60, 'Sei il cittadino n° {membri}'),
+  input('riga3', 'Riga 3 (piccola, facoltativa)', c.riga3, TextInputStyle.Short, 80, 'Es: ID {id}'),
   input('font', 'Font (es. Arial, Impact, Bahnschrift)', c.font, TextInputStyle.Short, 60, 'Arial'),
 );
 
 const modalCardStile = (c) => new ModalBuilder().setCustomId('wbm:cardstile').setTitle('🌄 Sfondo & colori immagine').addComponents(
-  input('sfondo', 'Sfondo: link / file / vuoto = sfumatura', c.sfondo, TextInputStyle.Short, 1000, 'file = immagine caricata con /benvenuto sfondo'),
+  input('sfondo', 'Sfondo: vicelife / file / link / vuoto', c.sfondo, TextInputStyle.Short, 1000, 'vicelife = banner ufficiale, file = caricato con /benvenuto'),
   input('oscuramento', 'Oscuramento sfondo da 0 a 90 (%)', String(c.oscuramento), TextInputStyle.Short, 2, '40'),
   input('accento', 'Colore bordo avatar / riga 2 / cornice', c.accento, TextInputStyle.Short, 7, '#ff2d95'),
   input('coloreTesto', 'Colore scritte', c.coloreTesto, TextInputStyle.Short, 7, '#ffffff'),
@@ -325,7 +333,7 @@ async function handleWelcomePanel(i) {
     if (i.customId === 'wbm:cardstile') {
       const changes = { attiva: true };
       const sf = v('sfondo');
-      if (!sf || isUrl(sf) || sf.toLowerCase() === 'file') changes.sfondo = sf.toLowerCase() === 'file' ? 'file' : sf;
+      if (!sf || isUrl(sf) || ['file', 'vicelife'].includes(sf.toLowerCase())) changes.sfondo = ['file', 'vicelife'].includes(sf.toLowerCase()) ? sf.toLowerCase() : sf;
       else errori.push('sfondo non valido (link, file o vuoto)');
       const osc = parseInt(v('oscuramento'), 10);
       if (!Number.isNaN(osc)) changes.oscuramento = Math.min(90, Math.max(0, osc));

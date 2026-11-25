@@ -21,20 +21,27 @@ const W = 1024; const H = 450;
 
 const DEFAULT_CARD = {
   attiva: true,
-  sfondo: '',            // '' = sfumatura colorata | 'file' = immagine caricata | link
-  oscuramento: 40,       // 0-90 %
-  riga1: 'BENVENUTO/A',
-  riga2: '{username}',
-  riga3: 'Sei il cittadino n° {membri}',
+  sfondo: 'vicelife',    // 'vicelife' = banner VICE LIFE | 'file' = caricato | link | '' = sfumatura
+  oscuramento: 0,        // 0-90 %
+  riga1: '{username}',
+  riga2: 'Sei il cittadino n° {membri}',
+  riga3: '',
   font: 'Arial',
   coloreTesto: '#ffffff',
   accento: '#ff2d95',    // bordo avatar e cornice
-  layout: 'centro',      // 'centro' | 'sinistra'
+  layout: 'profilo',     // 'profilo' (banner sopra, testo sotto) | 'centro' | 'sinistra'
   forma: 'cerchio',      // 'cerchio' | 'quadrato'
   cornice: true,
 };
 
 const sfondoFile = (guildId) => path.join(SFONDI_DIR, `${guildId}.png`);
+const BANNER_VICELIFE = path.join(__dirname, 'banner-vicelife.jpg'); // banner ufficiale VICE LIFE RP
+
+function percorsoSfondo(c, guildId) {
+  if (c.sfondo === 'file') return sfondoFile(guildId);
+  if (c.sfondo === 'vicelife') return BANNER_VICELIFE;
+  return c.sfondo;
+}
 
 async function saveBackground(guildId, url) {
   const res = await fetch(url);
@@ -77,15 +84,74 @@ function roundRect(ctx, x, y, w, h, r) {
  * @param {object} c   impostazioni card
  * @param {object} info { guildId, avatarURL, testi: [riga1, riga2, riga3] già compilati }
  */
+// Layout "profilo": banner intero in alto, avatar a cavallo, nome e testo sotto
+async function renderProfilo(c, info) {
+  const { createCanvas } = lib();
+  const accento = c.accento || DEFAULT_CARD.accento;
+  const bg = await load(percorsoSfondo(c, info.guildId));
+  const BW = 1024;
+  const BH = bg ? Math.min(420, Math.round(BW * bg.height / bg.width)) : 300;
+  const R = 78; const SOTTO = 200;
+  const canvas = createCanvas(BW, BH + SOTTO);
+  const ctx = canvas.getContext('2d');
+
+  // Parte bassa scura
+  const g = ctx.createLinearGradient(0, BH, 0, BH + SOTTO);
+  g.addColorStop(0, '#1a0526'); g.addColorStop(1, '#0b0012');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, BW, BH + SOTTO);
+
+  // Banner
+  if (bg) {
+    const scale = Math.max(BW / bg.width, BH / bg.height);
+    ctx.drawImage(bg, (BW - bg.width * scale) / 2, (BH - bg.height * scale) / 2, bg.width * scale, bg.height * scale);
+  } else {
+    const gb = ctx.createLinearGradient(0, 0, BW, BH);
+    gb.addColorStop(0, accento); gb.addColorStop(1, '#14002b');
+    ctx.fillStyle = gb; ctx.fillRect(0, 0, BW, BH);
+  }
+  const dark = Math.min(90, Math.max(0, Number(c.oscuramento) || 0)) / 100;
+  if (dark) { ctx.fillStyle = `rgba(0,0,0,${dark})`; ctx.fillRect(0, 0, BW, BH); }
+  ctx.fillStyle = accento; ctx.fillRect(0, BH - 3, BW, 6); // linea colorata tra banner e testo
+
+  // Avatar a cavallo della linea
+  const ax = BW / 2; const ay = BH;
+  const avatar = await load(info.avatarURL);
+  const forma = () => { ctx.beginPath(); if (c.forma === 'quadrato') roundRect(ctx, ax - R, ay - R, R * 2, R * 2, 22); else ctx.arc(ax, ay, R, 0, Math.PI * 2); ctx.closePath(); };
+  ctx.save(); forma(); ctx.fillStyle = '#222'; ctx.fill(); ctx.clip();
+  if (avatar) ctx.drawImage(avatar, ax - R, ay - R, R * 2, R * 2);
+  ctx.restore();
+  ctx.lineWidth = 7; ctx.strokeStyle = accento; forma(); ctx.stroke();
+
+  // Testi sotto
+  const testi = info.testi.filter(Boolean);
+  const font = c.font || 'Arial';
+  ctx.textAlign = 'center';
+  ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 8;
+  const sizes = [46, 30, 24];
+  let y = BH + R + 52;
+  testi.forEach((t, n) => {
+    fitFont(ctx, t, font, sizes[n] ?? 24, BW - 80);
+    ctx.fillStyle = n === 1 ? accento : (c.coloreTesto || '#ffffff');
+    ctx.fillText(t, BW / 2, y);
+    y += (sizes[n + 1] ?? 24) + 16;
+  });
+
+  if (c.cornice) {
+    ctx.shadowBlur = 0; ctx.lineWidth = 8; ctx.strokeStyle = accento;
+    roundRect(ctx, 4, 4, BW - 8, BH + SOTTO - 8, 22); ctx.stroke();
+  }
+  return canvas.encode('png');
+}
+
 async function renderCard(c, info) {
+  if (c.layout === 'profilo') return renderProfilo(c, info);
   const { createCanvas } = lib();
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
   const accento = c.accento || DEFAULT_CARD.accento;
 
   // Sfondo
-  const bgSrc = c.sfondo === 'file' ? sfondoFile(info.guildId) : c.sfondo;
-  const bg = await load(bgSrc);
+  const bg = await load(percorsoSfondo(c, info.guildId));
   if (bg) {
     const scale = Math.max(W / bg.width, H / bg.height); // effetto "copri tutto"
     const bw = bg.width * scale; const bh = bg.height * scale;

@@ -20,6 +20,16 @@ const FORMATI = {
   '{nome} ({id})': 'ale_nox2 (0008)',
 };
 
+const FONDATORE = '1003806561254260887'; // ha sempre l'ID 0001
+
+// Membri in ordine di ingresso: prima il fondatore, poi gli altri. Bot esclusi.
+async function membriInOrdine(guild) {
+  let lista = guild.members.cache;
+  if (lista.size < guild.memberCount) lista = await guild.members.fetch().catch(() => guild.members.cache);
+  return [...lista.values()].filter((m) => !m.user.bot)
+    .sort((a, b) => (a.id === FONDATORE ? -1 : b.id === FONDATORE ? 1 : (a.joinedTimestamp ?? 0) - (b.joinedTimestamp ?? 0)));
+}
+
 const get = (gid) => (cfg(gid).idfissi ??= { attivo: true, formato: '{nome} [{id}]', cifre: 4, prossimo: 1, utenti: {} });
 const pad = (n, c) => String(n).padStart(c, '0');
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -30,6 +40,10 @@ function idOf(member, crea = true) {
   const d = get(member.guild.id);
   let u = d.utenti[member.id];
   if (typeof u === 'number') u = d.utenti[member.id] = { n: u }; // compatibilità
+  if (!u && crea && member.id === FONDATORE) {
+    u = d.utenti[member.id] = { n: 1, gioco: null };
+    save();
+  }
   if (!u && crea) {
     u = d.utenti[member.id] = { n: d.prossimo++, gioco: null };
     save();
@@ -109,6 +123,7 @@ function panel(guild, warning = '') {
         new ButtonBuilder().setCustomId('id:toggle').setLabel(d.attivo ? 'Disattiva' : 'Attiva')
           .setEmoji(d.attivo ? '🔕' : '✅').setStyle(d.attivo ? ButtonStyle.Danger : ButtonStyle.Success),
         new ButtonBuilder().setCustomId('id:tutti').setLabel('Dai l\'ID ai membri già nel server').setEmoji('👥').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('id:rinumera').setLabel('Rinumera tutti').setEmoji('🔢').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId('id:impostazioni').setLabel('Cifre & prossimo numero').setEmoji('⚙️').setStyle(ButtonStyle.Secondary),
       ),
     ],
@@ -124,9 +139,7 @@ const modalImpostazioni = (d) => new ModalBuilder().setCustomId('idm:impostazion
 
 async function assegnaTutti(guild) {
   const d = get(guild.id);
-  const membri = [...(await guild.members.fetch()).values()]
-    .filter((m) => !m.user.bot)
-    .sort((a, b) => (a.joinedTimestamp ?? 0) - (b.joinedTimestamp ?? 0));
+  const membri = await membriInOrdine(guild);
   let nuovi = 0; let rinominati = 0; let saltati = 0;
   for (const m of membri) {
     if (!d.utenti[m.id]) { idOf(m); nuovi++; }
@@ -138,16 +151,19 @@ async function assegnaTutti(guild) {
 // Rinumera tutti in ordine di ingresso: proprietario incluso, bot esclusi
 async function rinumera(guild) {
   const d = get(guild.id);
-  const membri = [...(await guild.members.fetch()).values()]
-    .filter((m) => !m.user.bot)
-    .sort((a, b) => (a.joinedTimestamp ?? 0) - (b.joinedTimestamp ?? 0));
+  const membri = await membriInOrdine(guild);
   const vecchi = d.utenti;
   d.utenti = {};
   membri.forEach((m, n) => { d.utenti[m.id] = { n: n + 1, gioco: vecchi[m.id]?.gioco ?? null }; });
-  d.prossimo = membri.length + 1;
+  if (!d.utenti[FONDATORE]) { // il fondatore ha sempre 0001, anche se non è nel server
+    Object.values(d.utenti).forEach((u) => { u.n += 1; });
+    d.utenti[FONDATORE] = { n: 1, gioco: vecchi[FONDATORE]?.gioco ?? null };
+  }
+  d.prossimo = Object.keys(d.utenti).length + 1;
   save();
   for (const m of membri) await applyNick(m).catch(() => {});
-  console.log(`🆔 ID rinumerati in ordine di ingresso (proprietario = ${pad(1, d.cifre)}, bot esclusi)`);
+  console.log(`🆔 ID rinumerati: fondatore = ${pad(1, d.cifre)}, poi tutti in ordine di ingresso (bot esclusi)`);
+  return membri.length;
 }
 
 // All'avvio: la prima volta rinumera, poi dà l'ID a chi non ce l'ha ancora
@@ -155,7 +171,7 @@ async function onReady(guild) {
   const d = get(guild.id);
   if (!d.attivo) return;
   try {
-    if ((d.idVer ?? 1) < 2) { await rinumera(guild); d.idVer = 2; save(); return; }
+    if ((d.idVer ?? 1) < 3) { await rinumera(guild); d.idVer = 3; save(); return; }
     await assegnaTutti(guild);
   } catch (e) { console.warn(`[id] ${e.message}`); }
 }
@@ -193,6 +209,11 @@ async function handle(i) {
     if (prossimo >= 1) d.prossimo = prossimo;
     save();
     return i.update(panel(i.guild, '✅ Impostazioni salvate.'));
+  }
+  if (i.customId === 'id:rinumera') {
+    await i.update(panel(i.guild, '⏳ Rinumero tutti in ordine di ingresso (fondatore = 0001)...'));
+    const n = await rinumera(i.guild);
+    return i.editReply(panel(i.guild, `✅ Rinumerati ${n} membri: fondatore 0001, poi tutti in ordine di ingresso.`));
   }
   if (i.customId === 'id:tutti') {
     await i.update(panel(i.guild, '⏳ Sto assegnando gli ID in ordine di ingresso... (può volerci un po\' se siete in tanti)'));
