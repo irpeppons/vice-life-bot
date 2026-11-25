@@ -10,6 +10,7 @@
 //   /stato-server   -> online / offline / manutenzione
 //   /wl-info        -> info per la whitelist conoscitiva (pubblicate da sole nel canale WL)
 //   /richiesta-wl   -> pannello richieste whitelist (canale privato con lo staff)
+//   /esito-wl       -> WL passata / non superata (solo esaminatori)
 // ================================================
 require('dotenv').config();
 const fs = require('fs');
@@ -47,6 +48,8 @@ const wl = require('./wl');
 wl.init(cfg, save);
 const richiestaWl = require('./richiestawl');
 richiestaWl.init(cfg, save);
+const esitoWl = require('./esitowl');
+esitoWl.init(cfg, save);
 
 // ---------- statistiche ----------
 const STATS = [
@@ -439,7 +442,7 @@ const commands = [
     .setDescription('Scegli i ruoli che ricevono in automatico i nuovi membri')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
     .setDMPermission(false),
-].map((c) => c.toJSON()).concat(tickets.command, idfissi.commands, community.commands, statoServer.command, wl.command, richiestaWl.command);
+].map((c) => c.toJSON()).concat(tickets.command, idfissi.commands, community.commands, statoServer.command, wl.command, richiestaWl.command, esitoWl.command);
 
 // ---------- client ----------
 const client = new Client({
@@ -505,6 +508,8 @@ client.on('interactionCreate', async (i) => {
   try {
     // Sistema ticket
     if (tickets.isTicket(i)) return await tickets.handle(i);
+    // Esito whitelist
+    if (esitoWl.isEsito(i)) return await esitoWl.handle(i);
     // Richieste whitelist
     if (richiestaWl.isRichiesta(i)) return await richiestaWl.handle(i);
     // Info whitelist

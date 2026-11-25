@@ -302,7 +302,14 @@ async function gestioneStaff(i) {
 async function handle(i) {
   if (i.isChatInputCommand()) return i.reply({ ...pannelloStaff(i.guild), flags: EPH });
   const id = i.customId;
-  if (id === 'rw:apri') return i.showModal(modalRichiesta(i.user));
+  if (id === 'rw:apri') {
+    // Se non ha superato la WL e deve ancora aspettare, non può richiederla
+    const u = cfg(i.guild.id).esitiwl?.utenti?.[i.user.id];
+    if (u?.esito === 'no' && u.riprova > Date.now()) {
+      return i.reply({ content: `⏰ Non hai superato la WL: potrai richiederla di nuovo <t:${Math.floor(u.riprova / 1000)}:R> (<t:${Math.floor(u.riprova / 1000)}:f>).`, flags: EPH });
+    }
+    return i.showModal(modalRichiesta(i.user));
+  }
   if (id === 'rwm:invia') return creaRichiesta(i);
   if (id.startsWith('rwm:rifiuta')) return rifiuta(i);
   if (/^rw:(claim|ok|no|chiudi|chiudisi)(:|$)/.test(id)) return azioneStaff(i);
