@@ -1,6 +1,6 @@
 // ================================================
 //   VICE LIFE🌴  -  AUDIO SALA D'ATTESA ASSISTENZA
-//   Quando un player entra nel canale vocale d'attesa, il bot gli fa
+//   Quando chiunque entra nel canale vocale d'attesa (anche lo staff), il bot gli fa
 //   sentire un audio ("uno staff sarà presto disponibile").
 //   Discord non permette di far sentire un audio a UNA sola persona dentro
 //   un canale, quindi il bot sposta il player per pochi secondi in un canale
@@ -30,8 +30,6 @@ const rientri = new Set();      // player che il bot sta riportando nell'attesa 
 const coda = new Map();         // una riproduzione alla volta per server
 const temporanei = (gid) => (cfg(gid).canaliAudio ??= []);
 
-const isStaff = (member) => member.permissions.has(PermissionFlagsBits.Administrator)
-  || (cfg(member.guild.id).tickets?.staff ?? []).some((r) => member.roles.cache.has(r));
 
 async function riproduci(member) {
   const g = member.guild;
@@ -97,7 +95,6 @@ function onVoiceUpdate(oldState, newState) {
   if (!member || member.user.bot) return;
   if (newState.channelId !== CANALE_ATTESA || oldState.channelId === CANALE_ATTESA) return;
   if (rientri.has(member.id) || inCorso.has(member.id)) return; // è il bot che lo sta riportando
-  if (isStaff(member)) { console.log(`🔇 ${member.user.username} è entrato in attesa ma è staff: niente audio (usa /test-audio per provarlo)`); return; }
   if (!fs.existsSync(AUDIO)) { console.warn('[audio] File audio mancante: audio/attesa-assistenza.ogg'); return; }
   console.log(`🔊 ${member.user.username} è entrato in attesa: gli faccio sentire l'audio`);
   metti(member);
