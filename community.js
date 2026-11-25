@@ -4,6 +4,7 @@
 //   /link      -> pannello link (Discord, social...) tutto personalizzabile
 //   /sondaggi  -> sondaggio con 1 voto per player
 //   /giveaway  -> giveaway con 1 vincitore estratto a caso alla scadenza
+//   /spoiler   -> immagini censurate (si preme sopra per vederle)
 // ================================================
 const path = require('path');
 const {
@@ -428,6 +429,36 @@ async function bottoneGiveaway(i) {
   if (azione === 'riestrai' && gw.finito) return estrai(i.guild, gw, gw.vincitore ? [gw.vincitore] : []);
 }
 
+// ================================================
+//   /spoiler  (immagini censurate: si preme sopra per vederle)
+// ================================================
+const modalSpoiler = () => new ModalBuilder().setCustomId('spm').setTitle('🙈 Spoiler').addComponents(
+  input('titolo', 'Titolo', { max: 200, placeholder: '🙈 SPOILER: nuova macchina in arrivo' }),
+  input('descrizione', 'Descrizione (puoi andare a capo)', { style: TextInputStyle.Paragraph, max: 1700, placeholder: 'Premi sull\'immagine per scoprirla 👇' }),
+);
+
+async function inviaSpoiler(i) {
+  const opz = inAttesa.get(`sp:${i.user.id}`);
+  if (!opz) return i.reply({ content: '⚠️ Tempo scaduto, rifai `/spoiler`.', flags: EPH });
+  inAttesa.delete(`sp:${i.user.id}`);
+  await i.deferReply({ flags: EPH });
+  const v = (k) => i.fields.getTextInputValue(k).trim();
+  const ping = [opz.menzione, opz.ruolo ? `<@&${opz.ruolo}>` : ''].filter(Boolean).join(' ');
+  const testo = [v('titolo') ? `## ${v('titolo')}` : '', v('descrizione'), ping].filter(Boolean).join('\n').slice(0, 2000);
+  // Il prefisso SPOILER_ fa apparire l'immagine sfocata finché non ci premi sopra
+  const files = opz.immagini.map((a, n) => new AttachmentBuilder(a.url, { name: `SPOILER_${n + 1}_${a.name}`.slice(0, 100) }));
+  const ch = i.guild.channels.cache.get(opz.canale);
+  try {
+    const msg = await ch.send({
+      content: testo || undefined, files,
+      allowedMentions: { parse: opz.menzione ? ['everyone'] : [], roles: opz.ruolo ? [opz.ruolo] : [] },
+    });
+    return i.editReply(`✅ Spoiler pubblicato: ${msg.url}`);
+  } catch (err) {
+    return i.editReply(`❌ Non riesco a pubblicare lo spoiler in <#${opz.canale}>: ${err.message}`);
+  }
+}
+
 // ---------- controllo scadenze (ogni 20 secondi) ----------
 let inCorso = false;
 async function controllaScadenze(client) {
@@ -460,9 +491,16 @@ const commands = [
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild).setDMPermission(false),
   conCanale(new SlashCommandBuilder().setName('sondaggi').setDescription('Crea un sondaggio (1 voto per player)'), 'Dove pubblicare il sondaggio'),
   conCanale(new SlashCommandBuilder().setName('giveaway').setDescription('Crea un giveaway con 1 vincitore'), 'Dove pubblicare il giveaway'),
+  conCanale(new SlashCommandBuilder().setName('spoiler').setDescription('Pubblica immagini censurate: si preme sopra per vederle'), 'Dove pubblicare lo spoiler')
+    .addAttachmentOption((o) => o.setName('immagine').setDescription('L\'immagine da censurare').setRequired(true))
+    .addAttachmentOption((o) => o.setName('immagine2').setDescription('Seconda immagine (facoltativa)'))
+    .addAttachmentOption((o) => o.setName('immagine3').setDescription('Terza immagine (facoltativa)'))
+    .addStringOption((o) => o.setName('menzione').setDescription('Chi taggare').addChoices(
+      { name: 'Nessuno', value: 'nessuno' }, { name: '@everyone', value: '@everyone' }, { name: '@here', value: '@here' }))
+    .addRoleOption((o) => o.setName('ruolo').setDescription('Tagga anche un ruolo (facoltativo)')),
 ].map((c) => c.toJSON());
 
-const NOMI = ['annunci', 'link', 'link-ds', 'sondaggi', 'giveaway'];
+const NOMI = ['annunci', 'link', 'link-ds', 'sondaggi', 'giveaway', 'spoiler'];
 
 async function handle(i) {
   if (i.isChatInputCommand()) {
@@ -475,12 +513,25 @@ async function handle(i) {
     if (i.commandName === 'link') return i.reply({ ...linkPannello(i.guild, 'ln'), flags: EPH });
     if (i.commandName === 'link-ds') return i.reply({ ...linkPannello(i.guild, 'ld'), flags: EPH });
     if (i.commandName === 'sondaggi') { inAttesa.set(`sd:${i.user.id}`, canale); return i.showModal(modalSondaggio()); }
+    if (i.commandName === 'spoiler') {
+      const immagini = ['immagine', 'immagine2', 'immagine3'].map((k) => i.options.getAttachment(k)).filter(Boolean);
+      if (immagini.some((a) => !a.contentType?.startsWith('image/') && !a.contentType?.startsWith('video/'))) {
+        return i.reply({ content: '❌ Puoi caricare solo immagini o video.', flags: EPH });
+      }
+      const m = i.options.getString('menzione');
+      inAttesa.set(`sp:${i.user.id}`, {
+        canale, immagini: immagini.map((a) => ({ url: a.url, name: a.name })),
+        menzione: m && m !== 'nessuno' ? m : '', ruolo: i.options.getRole('ruolo')?.id,
+      });
+      return i.showModal(modalSpoiler());
+    }
     if (i.commandName === 'giveaway') { inAttesa.set(`gw:${i.user.id}`, canale); return i.showModal(modalGiveaway()); }
   }
   const id = i.customId;
   if (id === 'anm') return inviaAnnuncio(i);
   if (id === 'sdm') return creaSondaggio(i);
   if (id === 'gwm') return creaGiveaway(i);
+  if (id === 'spm') return inviaSpoiler(i);
   if (id.startsWith('sd:')) return votaSondaggio(i);
   if (id.startsWith('gw:')) return bottoneGiveaway(i);
   if (/^(ln|ld)m?:/.test(id)) {
@@ -493,7 +544,7 @@ module.exports = {
   init(cfgFn, saveFn) { cfg = cfgFn; save = saveFn; },
   commands,
   isCommunity: (i) => (i.isChatInputCommand() && NOMI.includes(i.commandName))
-    || /^(anm|sdm|gwm|sd:|gw:|lnm?:|ldm?:)/.test(i.customId ?? ''),
+    || /^(anm|sdm|gwm|spm|sd:|gw:|lnm?:|ldm?:)/.test(i.customId ?? ''),
   handle,
   avviaTimer(client) {
     setInterval(() => controllaScadenze(client), 20 * 1000);
@@ -502,5 +553,5 @@ module.exports = {
   onReady: async (guild) => { await aggiornaLink(guild, 'ln'); await aggiornaLink(guild, 'ld'); },
   // per i test
   _durata: durata, _sondaggioMessaggio: sondaggioMessaggio, _giveawayMessaggio: giveawayMessaggio, _linkPannello: linkPannello,
-  _modals: () => [modalAnnuncio(), modalSondaggio(), modalGiveaway(), modalLink('ln', null), modalLink('ld', null), modalLinkTesti('ld', PANNELLI.ld.def), modalLinkStile('ld', PANNELLI.ld.def)],
+  _modals: () => [modalSpoiler(), modalAnnuncio(), modalSondaggio(), modalGiveaway(), modalLink('ln', null), modalLink('ld', null), modalLinkTesti('ld', PANNELLI.ld.def), modalLinkStile('ld', PANNELLI.ld.def)],
 };
