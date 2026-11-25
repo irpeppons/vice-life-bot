@@ -432,6 +432,7 @@ async function bottoneGiveaway(i) {
 // ================================================
 //   /spoiler  (immagini censurate: si preme sopra per vederle)
 // ================================================
+const EMOJI_SPOILER = '1575192806618570885';
 const modalSpoiler = () => new ModalBuilder().setCustomId('spm').setTitle('🙈 Spoiler').addComponents(
   input('titolo', 'Titolo', { max: 200, placeholder: '🙈 SPOILER: nuova macchina in arrivo' }),
   input('descrizione', 'Descrizione (puoi andare a capo)', { style: TextInputStyle.Paragraph, max: 1700, placeholder: 'Premi sull\'immagine per scoprirla 👇' }),
@@ -444,7 +445,10 @@ async function inviaSpoiler(i) {
   await i.deferReply({ flags: EPH });
   const v = (k) => i.fields.getTextInputValue(k).trim();
   const ping = [opz.menzione, opz.ruolo ? `<@&${opz.ruolo}>` : ''].filter(Boolean).join(' ');
-  const testo = [v('titolo') ? `## ${v('titolo')}` : '', v('descrizione'), ping].filter(Boolean).join('\n').slice(0, 2000);
+  // Emoji fissa + obiettivo interazioni, sempre in fondo allo spoiler
+  const emoji = i.guild.emojis.cache.get(EMOJI_SPOILER) ?? await i.guild.emojis.fetch(EMOJI_SPOILER).catch(() => null);
+  const fondo = `${emoji ? `${emoji}\n` : ''}**Arriviamo a 10 interazioni per il prossimo spoiler!**`;
+  const testo = [v('titolo') ? `## ${v('titolo')}` : '', v('descrizione'), ping, `\n${fondo}`].filter(Boolean).join('\n').slice(0, 2000);
   // Il prefisso SPOILER_ fa apparire l'immagine sfocata finché non ci premi sopra
   const files = opz.immagini.map((a, n) => new AttachmentBuilder(a.url, { name: `SPOILER_${n + 1}_${a.name}`.slice(0, 100) }));
   const ch = i.guild.channels.cache.get(opz.canale);
@@ -453,7 +457,8 @@ async function inviaSpoiler(i) {
       content: testo || undefined, files,
       allowedMentions: { parse: opz.menzione ? ['everyone'] : [], roles: opz.ruolo ? [opz.ruolo] : [] },
     });
-    return i.editReply(`✅ Spoiler pubblicato: ${msg.url}`);
+    if (emoji) await msg.react(emoji).catch(() => {}); // prima reazione, così i player la cliccano
+    return i.editReply(`✅ Spoiler pubblicato: ${msg.url}${emoji ? '' : '\n⚠️ Non trovo l\'emoji 1575192806618570885 in questo server.'}`);
   } catch (err) {
     return i.editReply(`❌ Non riesco a pubblicare lo spoiler in <#${opz.canale}>: ${err.message}`);
   }
