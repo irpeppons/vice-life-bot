@@ -364,8 +364,13 @@ async function handleWelcomePanel(i) {
 // ================================================
 //   AUTORUOLI (ruoli dati in automatico a chi entra)
 // ================================================
-const DEFAULT_AUTORUOLI = ['1575145330767433879', '1575145370600611870', '1575145424963239998'];
-const getAutoruoli = (guildId) => (cfg(guildId).autoruoli ??= [...DEFAULT_AUTORUOLI]);
+// Chi entra nel server riceve SOLO questi ruoli (Cittadinanza + In attesa whitelist)
+const DEFAULT_AUTORUOLI = ['1575145330767433879', '1575145467061477586'];
+function getAutoruoli(guildId) {
+  const c = cfg(guildId);
+  if ((c.autoruoliVer ?? 1) < 2) { c.autoruoli = [...DEFAULT_AUTORUOLI]; c.autoruoliVer = 2; save(); }
+  return (c.autoruoli ??= [...DEFAULT_AUTORUOLI]);
+}
 
 async function giveAutoruoli(member) {
   if (member.user.bot) return;
