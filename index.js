@@ -14,6 +14,7 @@
 //   /storie-pg      -> storie dei personaggi (accettate dagli esaminatori)
 //   Audio sala d'attesa -> chi entra nel vocale d'attesa sente un messaggio (solo lui)
 //   Sito web           -> http://localhost:3000 (lato staff con password: /admin)
+//   /partner        -> pubblica un server partner (solo ruolo partner manager)
 // ================================================
 require('dotenv').config();
 const fs = require('fs');
@@ -57,6 +58,7 @@ const storie = require('./storie');
 storie.init(cfg, save);
 const voce = require('./voce');
 voce.init(cfg, save);
+const partner = require('./partner');
 
 // ---------- statistiche ----------
 const STATS = [
@@ -454,7 +456,7 @@ const commands = [
     .setDescription('Scegli i ruoli che ricevono in automatico i nuovi membri')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
     .setDMPermission(false),
-].map((c) => c.toJSON()).concat(tickets.command, idfissi.commands, community.commands, statoServer.command, wl.command, richiestaWl.command, esitoWl.command, storie.command, voce.command);
+].map((c) => c.toJSON()).concat(tickets.command, idfissi.commands, community.commands, statoServer.command, wl.command, richiestaWl.command, esitoWl.command, storie.command, voce.command, partner.command);
 
 // ---------- client ----------
 const client = new Client({
@@ -526,6 +528,8 @@ client.on('interactionCreate', async (i) => {
   try {
     // Sistema ticket
     if (tickets.isTicket(i)) return await tickets.handle(i);
+    // Partnership
+    if (partner.isPartner(i)) return await partner.handle(i);
     // Prova audio sala d'attesa
     if (voce.isVoce(i)) return await voce.handle(i);
     // Storie dei personaggi
