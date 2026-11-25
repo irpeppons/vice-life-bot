@@ -12,6 +12,7 @@
 //   /richiesta-wl   -> pannello richieste whitelist (canale privato con lo staff)
 //   /esito-wl       -> WL passata / non superata (solo esaminatori)
 //   /storie-pg      -> storie dei personaggi (accettate dagli esaminatori)
+//   Audio sala d'attesa -> chi entra nel vocale d'attesa sente un messaggio (solo lui)
 // ================================================
 require('dotenv').config();
 const fs = require('fs');
@@ -53,6 +54,8 @@ const esitoWl = require('./esitowl');
 esitoWl.init(cfg, save);
 const storie = require('./storie');
 storie.init(cfg, save);
+const voce = require('./voce');
+voce.init(cfg, save);
 
 // ---------- statistiche ----------
 const STATS = [
@@ -454,7 +457,7 @@ const commands = [
 
 // ---------- client ----------
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessageReactions],
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessageReactions, GatewayIntentBits.GuildVoiceStates],
   partials: [Partials.GuildMember, Partials.Message, Partials.Channel, Partials.Reaction, Partials.User],
 });
 
@@ -487,6 +490,7 @@ client.once('clientReady', async () => {
     await richiestaWl.onReady(g)?.catch?.(() => {});
     await esitoWl.onReady(g).catch(() => {});
     await storie.onReady(g).catch(() => {});
+    await voce.onReady(g).catch(() => {});
     if (cfg(g.id).stats) await updateStats(g);
   }
   setInterval(() => client.guilds.cache.forEach((g) => cfg(g.id).stats && scheduleStats(g)), UPDATE_EVERY_MS);
@@ -494,6 +498,7 @@ client.once('clientReady', async () => {
 });
 
 client.on('guildCreate', (g) => nascondiMessaggioIngresso(g));
+client.on('voiceStateUpdate', (oldState, newState) => voce.onVoiceUpdate(oldState, newState));
 client.on('messageReactionAdd', (reaction, user) => community.onReaction(reaction, user));
 client.on('guildMemberAdd', async (member) => {
   console.log(`👋 Nuovo membro: ${member.user.username}`);
