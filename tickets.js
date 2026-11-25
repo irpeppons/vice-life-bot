@@ -36,12 +36,17 @@ const DEFAULT = {
 // Ruoli staff che vedono TUTTI i ticket (oltre a quelli scelti per ogni tipo)
 const DEFAULT_STAFF = [
   '1575142910888906862', '1575143071564304454', '1575143178414063649', '1575143272404357200',
-  '1575143396572528722', '1575143684528279654', '1575144009914122242', '1575144054608502915',
-  '1575144091333824512', '1575144154814480496', '1575144207906250842', '1575144231134040104',
+  '1575143396572528722', '1575144009914122242', '1575144054608502915', '1575144091333824512',
+  '1575144154814480496', '1575144181167554671', '1575144207906250842', '1575144231134040104',
 ];
 function get(gid) {
   const t = (cfg(gid).tickets ??= structuredClone(DEFAULT));
   t.staff ??= [...DEFAULT_STAFF];
+  if ((t.staffVer ?? 1) < 2) { // correzione staff: +1575144181167554671, -1575143684528279654
+    t.staff = [...new Set([...t.staff.filter((r) => r !== '1575143684528279654'), '1575144181167554671'])];
+    t.staffVer = 2;
+    save?.();
+  }
   return t;
 }
 // Tutti i ruoli staff di un tipo: staff generale + ruoli del tipo
