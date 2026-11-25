@@ -13,6 +13,8 @@ const {
 
 const EPH = MessageFlags.Ephemeral;
 const ROSA = '#ff2d95';
+const CANALE_RICHIESTE = '1575255461714726954'; // canale staff dove arrivano TUTTE le richieste (attività e fazioni)
+const RUOLO_APPROVA = '1575144590724304917';    // solo questo ruolo può approvare o rifiutare
 const BANNER = 'banner-vicelife.jpg';
 
 // Crea un sistema di richieste (attività, fazioni...) con il suo pannello
@@ -21,8 +23,7 @@ const { chiave, P, CANALE, MINIMO, comando, cosa, emoji, titolo, spiegazione, ca
 let cfg; let save;
 
 const get = (gid) => (cfg(gid)[chiave] ??= { canale: CANALE, pannello: null, richieste: {} });
-const isStaff = (i) => i.memberPermissions?.has(PermissionFlagsBits.ManageGuild)
-  || (cfg(i.guild.id).tickets?.staff ?? []).some((r) => i.member.roles.cache.has(r));
+const isStaff = (i) => i.member?.roles?.cache?.has(RUOLO_APPROVA);
 const nuovoId = () => Date.now().toString(36);
 
 function pannello(guild) {
@@ -99,13 +100,13 @@ async function invia(i) {
       { name: '📌 Stato', value: '⏳ In attesa dello staff' },
     )
     .setFooter({ text: `VICE LIFE RP 🌴 • Richiesta ${cosa}` }).setTimestamp();
-  const ch = await g.channels.fetch(d.canale).catch(() => null) ?? i.channel;
-  // tagga tutti i membri
-  const msg = await ch.send({ content: membri.map((u) => `<@${u}>`).join(' '), embeds: [e], components: [bottoni(id)], allowedMentions: { users: membri } });
+  // la richiesta va nel canale staff delle richieste (i membri sono taggati nella richiesta)
+  const ch = await g.channels.fetch(CANALE_RICHIESTE).catch(() => null);
+  if (!ch) return i.editReply('❌ Non trovo il canale delle richieste: avvisa lo staff.');
+  const msg = await ch.send({ content: `🆕 Nuova richiesta **${cosa}** • <@&${RUOLO_APPROVA}>`, embeds: [e], components: [bottoni(id)], allowedMentions: { roles: [RUOLO_APPROVA] } });
   d.richieste[id] = { richiedente: i.user.id, membri, nome: v('nome'), stato: 'attesa', canale: ch.id, messaggio: msg.id, data: Date.now() };
   save();
-  await rimettiPannello(g, ch.id).catch(() => {});
-  return i.editReply(`✅ Richiesta inviata! Lo staff la valuterà e riceverai la risposta in privato. ${msg.url}`);
+  return i.editReply('✅ Richiesta inviata allo staff! La valuteranno e riceverai la risposta in privato.');
 }
 
 async function segnaStato(msg, testoStato, colore) {
@@ -132,13 +133,15 @@ async function handle(i) {
 
   const [a, b, rid] = id.split(':');
   const d = get(i.guild.id); const r = d.richieste[rid];
-  if (!isStaff(i)) return i.reply({ content: '❌ Solo lo staff può approvare o rifiutare le richieste.', flags: EPH });
+  if (!isStaff(i)) return i.reply({ content: `❌ Solo il ruolo <@&${RUOLO_APPROVA}> può approvare o rifiutare le richieste.`, flags: EPH, allowedMentions: { parse: [] } });
   if (!r) return i.reply({ content: '❌ Richiesta non trovata.', flags: EPH });
   if (a === P && b === 'ok') {
     r.stato = 'ok'; r.staff = i.user.id; save();
     await segnaStato(i.message, `✅ Approvata da <@${i.user.id}>`, '#2ecc71');
     const dm = await avvisa(i.guild, r, `✅ La tua richiesta (${cosa}) **${r.nome}** su **VICE LIFE RP 🌴** è stata **approvata**! 🎉`);
-    await i.channel.send({ content: `✅ ${emoji} **${r.nome}** è stata **approvata**! ${r.membri.map((u) => `<@${u}>`).join(' ')}`, allowedMentions: { users: r.membri } }).catch(() => {});
+    // annuncio pubblico nel canale del pannello, con il tag di tutti i membri
+    const pubblico = await i.guild.channels.fetch(d.canale).catch(() => null);
+    await pubblico?.send({ content: `✅ ${emoji} **${r.nome}** è stata **approvata**! Complimenti a ${r.membri.map((u) => `<@${u}>`).join(' ')} 🎉`, allowedMentions: { users: r.membri } }).catch(() => {});
     return i.reply({ content: `✅ Richiesta approvata.${dm ? ' 📩 Richiedente avvisato in privato.' : ' ⚠️ DM chiusi.'}`, flags: EPH });
   }
   if (a === P && b === 'no') {
