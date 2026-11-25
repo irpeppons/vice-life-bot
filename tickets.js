@@ -54,6 +54,11 @@ function get(gid) {
     t.bannerVer = 2;
     save?.();
   }
+  if ((t.staffVer ?? 1) < 3) { // rimette sempre tutti i 12 ruoli staff ufficiali
+    t.staff = [...new Set([...DEFAULT_STAFF, ...(t.staff ?? []).filter((r) => r !== '1575143684528279654')])];
+    t.staffVer = 3;
+    save?.();
+  }
   if ((t.staffVer ?? 1) < 2) { // correzione staff: +1575144181167554671, -1575143684528279654
     t.staff = [...new Set([...t.staff.filter((r) => r !== '1575143684528279654'), '1575144181167554671'])];
     t.staffVer = 2;
@@ -249,7 +254,7 @@ function tipoPanel(guild, tipo, warning = '') {
     content, embeds: [], files: [], attachments: [],
     components: [
       new ActionRowBuilder().addComponents(cat),
-      ...righeRuoli(guild, tipo.ruoli, `tk:ruoliadd:${tipo.id}`, `tk:ruolidel:${tipo.id}`, 'staff per questo tipo', get(guild.id).staff),
+      ...righeRuoli(guild, tipo.ruoli, `tk:ruoliadd:${tipo.id}`, `tk:ruolidel:${tipo.id}`, 'staff per questo tipo', [...new Set([...DEFAULT_STAFF, ...get(guild.id).staff])]),
       new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`tk:edit:${tipo.id}`).setLabel('Modifica testi').setEmoji('✏️').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`tk:colbtn:${tipo.id}`).setLabel('Colore pulsante').setEmoji('🎨').setStyle(ButtonStyle[tipo.stile] ?? ButtonStyle.Primary),
