@@ -66,8 +66,13 @@ async function applyNick(member, base) {
 async function onJoin(member) {
   if (member.user.bot || !get(member.guild.id).attivo) return;
   idOf(member);
-  await applyNick(member, member.user.globalName ?? member.user.username)
-    .catch((e) => console.warn(`[id] ${member.user.username}: ${e.message}`));
+  try {
+    const ok = await applyNick(member, member.user.globalName ?? member.user.username);
+    console.log(ok ? `🆔 ${member.user.username} -> ${member.nickname ?? nickFor(member, member.user.username)}`
+      : `⚠️ [id] Non posso rinominare ${member.user.username}: il ruolo VICE LIFE🌴 deve stare SOPRA i suoi ruoli`);
+  } catch (e) {
+    console.warn(`❌ [id] ${member.user.username}: ${e.message} -> dai al bot il permesso Amministratore e mettilo in cima ai ruoli`);
+  }
 }
 
 // Se un player cambia nickname, il numero viene rimesso in automatico

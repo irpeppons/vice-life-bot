@@ -15,6 +15,7 @@ const {
   EmbedBuilder, SlashCommandBuilder, ActivityType,
   ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelSelectMenuBuilder,
   ModalBuilder, TextInputBuilder, TextInputStyle, StringSelectMenuBuilder, AttachmentBuilder, RoleSelectMenuBuilder,
+  GuildSystemChannelFlags, SystemChannelFlagsBitField,
 } = require('discord.js');
 const { DEFAULT_CARD, renderCard, saveBackground, lib: loadCanvas } = require('./card');
 
@@ -340,10 +341,26 @@ const getAutoruoli = (guildId) => (cfg(guildId).autoruoli ??= [...DEFAULT_AUTORU
 
 async function giveAutoruoli(member) {
   if (member.user.bot) return;
-  const ruoli = getAutoruoli(member.guild.id).filter((r) => member.guild.roles.cache.has(r));
+  const tutti = getAutoruoli(member.guild.id);
+  const ruoli = tutti.filter((r) => member.guild.roles.cache.has(r));
+  const mancanti = tutti.filter((r) => !ruoli.includes(r));
+  if (mancanti.length) console.warn(`[autoruoli] Questi ruoli non esistono nel server: ${mancanti.join(', ')}`);
   if (!ruoli.length) return;
-  await member.roles.add(ruoli, 'Autoruoli VICE LIFE')
-    .catch((e) => console.warn(`[autoruoli] ${member.guild.name}: ${e.message} (il ruolo del bot deve stare SOPRA questi ruoli)`));
+  try {
+    await member.roles.add(ruoli, 'Autoruoli VICE LIFE');
+    console.log(`🎭 Ruoli dati a ${member.user.username}`);
+  } catch (e) {
+    console.warn(`❌ [autoruoli] ${member.user.username}: ${e.message} -> sposta il ruolo VICE LIFE🌴 SOPRA questi ruoli e dagli il permesso Amministratore`);
+  }
+}
+
+// Toglie il messaggio automatico di Discord "X ha deciso di fare un salto nel server"
+async function nascondiMessaggioIngresso(guild) {
+  const flag = GuildSystemChannelFlags.SuppressJoinNotifications;
+  if (guild.systemChannelFlags.has(flag)) return;
+  await guild.setSystemChannelFlags(new SystemChannelFlagsBitField(guild.systemChannelFlags).add(flag))
+    .then(() => console.log(`🔇 Messaggio automatico di ingresso di Discord disattivato su ${guild.name}`))
+    .catch((e) => console.warn(`[ingresso] Non riesco a disattivare il messaggio di Discord: ${e.message}`));
 }
 
 function autoruoliPanel(guild, warning = '') {
@@ -416,13 +433,16 @@ client.once('clientReady', async () => {
   }
 
   for (const g of client.guilds.cache.values()) {
+    await nascondiMessaggioIngresso(g);
     await g.members.fetch().catch(() => {});
     if (cfg(g.id).stats) await updateStats(g);
   }
   setInterval(() => client.guilds.cache.forEach((g) => cfg(g.id).stats && scheduleStats(g)), UPDATE_EVERY_MS);
 });
 
+client.on('guildCreate', (g) => nascondiMessaggioIngresso(g));
 client.on('guildMemberAdd', async (member) => {
+  console.log(`👋 Nuovo membro: ${member.user.username}`);
   await giveAutoruoli(member);
   await idfissi.onJoin(member);
   await sendWelcome(member).catch((e) => console.warn(`[benvenuto] ${member.guild.name}: ${e.message}`));
