@@ -13,7 +13,12 @@ const {
 } = require('discord.js');
 
 const EPH = MessageFlags.Ephemeral;
-const BANNER = path.join(__dirname, 'banner-vicelife.jpg');
+// Banner pronti: si scrivono come parola nel campo immagine
+const BANNERS = {
+  vicelife: 'banner-vicelife.jpg', // VICE LIFE RP
+  discord: 'banner-discord.jpg',   // VICE LIFE RP DISCORD
+  ticket: 'banner-ticket.jpg',     // VICE LIFE RP TICKET
+};
 const ROSA = '#ff2d95';
 let cfg; let save;
 
@@ -35,10 +40,11 @@ function durata(s) {
   return ms || null;
 }
 
-// Immagine: 'vicelife' = banner ufficiale (allegato), link, oppure niente
+// Immagine: 'vicelife' / 'discord' / 'ticket' = banner ufficiali (allegati), link, oppure niente
 function immagine(embed, scelta) {
   const s = (scelta || '').trim();
-  if (s.toLowerCase() === 'vicelife') { embed.setImage('attachment://banner-vicelife.jpg'); return [new AttachmentBuilder(BANNER, { name: 'banner-vicelife.jpg' })]; }
+  const file = BANNERS[s.toLowerCase()];
+  if (file) { embed.setImage(`attachment://${file}`); return [new AttachmentBuilder(path.join(__dirname, file), { name: file })]; }
   if (isUrl(s)) embed.setImage(s);
   return [];
 }
@@ -58,7 +64,7 @@ const inAttesa = new Map(); // utente -> opzioni del comando
 const modalAnnuncio = () => new ModalBuilder().setCustomId('anm').setTitle('📢 Nuovo annuncio').addComponents(
   input('titolo', 'Titolo', { placeholder: '📢 AGGIORNAMENTO SERVER' }),
   input('testo', 'Testo (puoi andare a capo)', { style: TextInputStyle.Paragraph, max: 4000, required: true }),
-  input('immagine', 'Immagine: vicelife / link / vuoto', { value: 'vicelife', max: 1000 }),
+  input('immagine', 'Immagine: vicelife / discord / link / vuoto', { value: 'vicelife', max: 1000 }),
   input('colore', 'Colore (HEX)', { value: ROSA, max: 7 }),
   input('footer', 'Footer (riga in basso)', { value: 'VICE LIFE RP 🌴 • Staff', max: 1024 }),
 );
@@ -86,18 +92,27 @@ async function inviaAnnuncio(i) {
 }
 
 // ================================================
-//   /link  (pannello link sempre in chat)
+//   /link e /link-ds  (pannelli link sempre in chat)
 // ================================================
-const LINK_DEFAULT = {
-  titolo: '🔗 Link ufficiali VICE LIFE RP 🌴',
-  descrizione: 'Tutti i nostri link ufficiali in un solo posto 👇\nInvita i tuoi amici e seguici sui social!',
-  footer: 'VICE LIFE RP 🌴',
-  colore: ROSA,
-  immagine: 'vicelife',
-  links: [],
-  pubblicato: null,
+const PANNELLI = {
+  ln: {
+    chiave: 'link', comando: '/link', nome: '🔗 Pannello Link',
+    def: {
+      titolo: '🔗 Link ufficiali VICE LIFE RP 🌴',
+      descrizione: 'Tutti i nostri link ufficiali in un solo posto 👇\nInvita i tuoi amici e seguici sui social!',
+      footer: 'VICE LIFE RP 🌴', colore: ROSA, immagine: 'vicelife', links: [], pubblicato: null,
+    },
+  },
+  ld: {
+    chiave: 'linkds', comando: '/link-ds', nome: '💬 Pannello Link Discord',
+    def: {
+      titolo: '💬 Entra nel Discord di VICE LIFE RP 🌴',
+      descrizione: 'Unisciti alla community di **VICE LIFE RP**!\nPremi il pulsante qui sotto per entrare nel nostro Discord 👇',
+      footer: 'VICE LIFE RP 🌴', colore: '#3aa0ff', immagine: 'discord', links: [], pubblicato: null,
+    },
+  },
 };
-const getLink = (gid) => (cfg(gid).link ??= structuredClone(LINK_DEFAULT));
+const getPannello = (gid, p) => (cfg(gid)[PANNELLI[p].chiave] ??= structuredClone(PANNELLI[p].def));
 
 function linkEmbed(guild, l) {
   const e = new EmbedBuilder().setColor(l.colore || ROSA).setDescription(l.descrizione || '​');
@@ -124,8 +139,8 @@ function linkPubblico(guild, l) {
   return { embeds: [e], files, attachments: [], components: linkBottoni(l) };
 }
 
-async function aggiornaLink(guild) {
-  const l = getLink(guild.id);
+async function aggiornaLink(guild, p) {
+  const l = getPannello(guild.id, p);
   if (!l.pubblicato) return true;
   try {
     const ch = await guild.channels.fetch(l.pubblicato.canale);
@@ -135,63 +150,66 @@ async function aggiornaLink(guild) {
   } catch { return false; }
 }
 
-function linkPannello(guild, avviso = '') {
-  const l = getLink(guild.id);
+function linkPannello(guild, p, avviso = '') {
+  const l = getPannello(guild.id, p);
   const elenco = l.links.length ? l.links.map((x) => `${x.emoji || '🔗'} **${x.nome}** → ${x.url}`).join('\n') : '*Nessun link: premi ➕ Aggiungi link*';
   const { e, files } = linkEmbed(guild, l);
   const rows = [];
   if (l.links.length) {
-    rows.push(new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId('ln:modifica')
+    rows.push(new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId(`${p}:modifica`)
       .setPlaceholder('✏️ Modifica un link').addOptions(l.links.map((x) => ({ label: x.nome.slice(0, 100), value: x.id, ...(x.emoji ? { emoji: x.emoji } : {}) })))));
-    rows.push(new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId('ln:elimina')
+    rows.push(new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId(`${p}:elimina`)
       .setPlaceholder('🗑️ Elimina un link').addOptions(l.links.map((x) => ({ label: `Elimina: ${x.nome}`.slice(0, 100), value: x.id })))));
   }
   rows.push(
     new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('ln:testi').setLabel('Testi').setEmoji('✏️').setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId('ln:stile').setLabel('Colore & Banner').setEmoji('🎨').setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId('ln:aggiungi').setLabel('Aggiungi link').setEmoji('➕').setStyle(ButtonStyle.Success).setDisabled(l.links.length >= 25),
+      new ButtonBuilder().setCustomId(`${p}:testi`).setLabel('Testi').setEmoji('✏️').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`${p}:stile`).setLabel('Colore & Banner').setEmoji('🎨').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`${p}:aggiungi`).setLabel('Aggiungi link').setEmoji('➕').setStyle(ButtonStyle.Success).setDisabled(l.links.length >= 25),
     ),
-    new ActionRowBuilder().addComponents(new ChannelSelectMenuBuilder().setCustomId('ln:pubblica')
+    new ActionRowBuilder().addComponents(new ChannelSelectMenuBuilder().setCustomId(`${p}:pubblica`)
       .setPlaceholder('📢 Pubblica il pannello in un canale...').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)),
   );
   return {
-    content: (`## 🔗 Pannello Link – VICE LIFE🌴\n${l.pubblicato ? `📌 Pubblicato in <#${l.pubblicato.canale}> (si aggiorna da solo)` : '📌 *Non ancora pubblicato*'}\n\n**Link:**\n${elenco}\n\n👇 **Anteprima:**` + (avviso ? `\n\n${avviso}` : '')).slice(0, 2000),
+    content: (`## ${PANNELLI[p].nome} – VICE LIFE🌴\n${l.pubblicato ? `📌 Pubblicato in <#${l.pubblicato.canale}> (si aggiorna da solo)` : '📌 *Non ancora pubblicato*'}\n\n**Link:**\n${elenco}\n\n👇 **Anteprima:**` + (avviso ? `\n\n${avviso}` : '')).slice(0, 2000),
     embeds: [e], files, attachments: [], components: rows,
   };
 }
 
-const modalLink = (x) => new ModalBuilder().setCustomId(x ? `lnm:link:${x.id}` : 'lnm:link').setTitle(x ? '✏️ Modifica link' : '➕ Nuovo link').addComponents(
-  input('nome', 'Nome del pulsante (es. Discord, TikTok)', { value: x?.nome, max: 80, required: true }),
+const modalLink = (p, x) => new ModalBuilder().setCustomId(x ? `${p}m:link:${x.id}` : `${p}m:link`).setTitle(x ? '✏️ Modifica link' : '➕ Nuovo link').addComponents(
+  input('nome', 'Nome del pulsante (es. Entra nel Discord)', { value: x?.nome ?? (p === 'ld' ? 'Entra nel Discord' : ''), max: 80, required: true }),
   input('url', 'Link (deve iniziare con https://)', { value: x?.url, max: 512, required: true, placeholder: 'https://discord.gg/...' }),
-  input('emoji', 'Emoji (facoltativa)', { value: x?.emoji, max: 64, placeholder: '💬 📸 🎵 ▶️' }),
+  input('emoji', 'Emoji (facoltativa)', { value: x?.emoji ?? (p === 'ld' ? '💬' : ''), max: 64, placeholder: '💬 📸 🎵 ▶️' }),
 );
-const modalLinkTesti = (l) => new ModalBuilder().setCustomId('lnm:testi').setTitle('✏️ Testi pannello link').addComponents(
+const modalLinkTesti = (p, l) => new ModalBuilder().setCustomId(`${p}m:testi`).setTitle('✏️ Testi pannello').addComponents(
   input('titolo', 'Titolo', { value: l.titolo }),
   input('descrizione', 'Descrizione (puoi andare a capo)', { value: l.descrizione, style: TextInputStyle.Paragraph, max: 4000 }),
   input('footer', 'Footer', { value: l.footer, max: 1024 }),
 );
-const modalLinkStile = (l) => new ModalBuilder().setCustomId('lnm:stile').setTitle('🎨 Colore & Banner').addComponents(
+const modalLinkStile = (p, l) => new ModalBuilder().setCustomId(`${p}m:stile`).setTitle('🎨 Colore & Banner').addComponents(
   input('colore', 'Colore (HEX)', { value: l.colore, max: 7 }),
-  input('immagine', 'Banner: vicelife / link / vuoto', { value: l.immagine, max: 1000 }),
+  input('immagine', 'Banner: discord / vicelife / link / vuoto', { value: l.immagine, max: 1000 }),
 );
 
 async function gestisciLink(i) {
-  const g = i.guild; const l = getLink(g.id);
+  const g = i.guild;
   const [a, b, id] = i.customId.split(':');
+  const p = a.slice(0, 2); // 'ln' oppure 'ld'
+  const l = getPannello(g.id, p);
   const fatto = async (avviso) => {
     save();
-    const ok = await aggiornaLink(g);
-    return i.update(linkPannello(g, ok ? avviso : `${avviso}\n⚠️ Non trovo più il pannello pubblicato: ripubblicalo.`));
+    const ok = await aggiornaLink(g, p);
+    return i.update(linkPannello(g, p, ok ? avviso : `${avviso}\n⚠️ Non trovo più il pannello pubblicato: ripubblicalo.`));
   };
-  if (a === 'ln') {
-    if (b === 'testi') return i.showModal(modalLinkTesti(l));
-    if (b === 'stile') return i.showModal(modalLinkStile(l));
-    if (b === 'aggiungi') return i.showModal(modalLink(null));
-    if (b === 'modifica') { const x = l.links.find((y) => y.id === i.values[0]); return x ? i.showModal(modalLink(x)) : i.update(linkPannello(g)); }
+  if (a === p) {
+    if (b === 'testi') return i.showModal(modalLinkTesti(p, l));
+    if (b === 'stile') return i.showModal(modalLinkStile(p, l));
+    if (b === 'aggiungi') return i.showModal(modalLink(p, null));
+    if (b === 'modifica') { const x = l.links.find((y) => y.id === i.values[0]); return x ? i.showModal(modalLink(p, x)) : i.update(linkPannello(g, p)); }
     if (b === 'elimina') { l.links = l.links.filter((y) => y.id !== i.values[0]); return fatto('🗑️ Link eliminato.'); }
     if (b === 'pubblica') {
       const ch = g.channels.cache.get(i.values[0]);
+      if (!l.links.length) return i.update(linkPannello(g, p, '⚠️ Aggiungi almeno un link prima di pubblicare (➕ Aggiungi link).'));
       try {
         const msg = await ch.send(linkPubblico(g, l));
         if (l.pubblicato) {
@@ -200,22 +218,22 @@ async function gestisciLink(i) {
         }
         l.pubblicato = { canale: ch.id, messaggio: msg.id };
         save();
-        return i.update(linkPannello(g, `✅ Pannello pubblicato in <#${ch.id}>! Resta lì e si aggiorna da solo.`));
-      } catch (e) { return i.update(linkPannello(g, `❌ Non posso scrivere in <#${ch.id}>: ${e.message}`)); }
+        return i.update(linkPannello(g, p, `✅ Pannello pubblicato in <#${ch.id}>! Resta lì e si aggiorna da solo.`));
+      } catch (e) { return i.update(linkPannello(g, p, `❌ Non posso scrivere in <#${ch.id}>: ${e.message}`)); }
     }
   }
-  if (a === 'lnm') {
+  if (a === `${p}m`) {
     const v = (k) => i.fields.getTextInputValue(k).trim();
     if (b === 'testi') { Object.assign(l, { titolo: v('titolo'), descrizione: v('descrizione'), footer: v('footer') }); return fatto('✅ Testi aggiornati.'); }
     if (b === 'stile') {
       l.colore = hex(v('colore'), l.colore);
       const img = v('immagine');
-      if (!img || isUrl(img) || img.toLowerCase() === 'vicelife') l.immagine = img.toLowerCase() === 'vicelife' ? 'vicelife' : img;
+      if (!img || isUrl(img) || BANNERS[img.toLowerCase()]) l.immagine = BANNERS[img.toLowerCase()] ? img.toLowerCase() : img;
       return fatto('✅ Stile aggiornato.');
     }
     if (b === 'link') {
       const url = v('url'); const emoji = v('emoji');
-      if (!isUrl(url)) return i.update(linkPannello(g, '❌ Link non valido: deve iniziare con https://'));
+      if (!isUrl(url)) return i.update(linkPannello(g, p, '❌ Link non valido: deve iniziare con https://'));
       const dati = { nome: v('nome'), url, emoji: emoji && isEmoji(emoji) ? emoji : '' };
       const avvisoEmoji = emoji && !dati.emoji ? ' (emoji non valida, tolta)' : '';
       if (id) Object.assign(l.links.find((y) => y.id === id) ?? {}, dati);
@@ -324,7 +342,7 @@ const modalGiveaway = () => new ModalBuilder().setCustomId('gwm').setTitle('🎁
   input('premio', 'Cosa si vince?', { max: 200, required: true, placeholder: 'Auto sportiva in gioco + 50.000$' }),
   input('durata', 'Quando scade? (es. 1g, 12h, 30m, 2g 6h)', { max: 30, required: true, placeholder: '1g' }),
   input('descrizione', 'Descrizione / regole (facoltativa)', { style: TextInputStyle.Paragraph, max: 2000 }),
-  input('immagine', 'Immagine: vicelife / link / vuoto', { value: 'vicelife', max: 1000 }),
+  input('immagine', 'Immagine: vicelife / discord / link / vuoto', { value: 'vicelife', max: 1000 }),
 );
 
 function giveawayMessaggio(guild, gw) {
@@ -438,11 +456,13 @@ const commands = [
     .addRoleOption((o) => o.setName('ruolo').setDescription('Tagga anche un ruolo (facoltativo)')),
   new SlashCommandBuilder().setName('link').setDescription('Apri il pannello per creare i link del server e dei social')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild).setDMPermission(false),
+  new SlashCommandBuilder().setName('link-ds').setDescription('Apri il pannello del link di invito Discord con il banner')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild).setDMPermission(false),
   conCanale(new SlashCommandBuilder().setName('sondaggi').setDescription('Crea un sondaggio (1 voto per player)'), 'Dove pubblicare il sondaggio'),
   conCanale(new SlashCommandBuilder().setName('giveaway').setDescription('Crea un giveaway con 1 vincitore'), 'Dove pubblicare il giveaway'),
 ].map((c) => c.toJSON());
 
-const NOMI = ['annunci', 'link', 'sondaggi', 'giveaway'];
+const NOMI = ['annunci', 'link', 'link-ds', 'sondaggi', 'giveaway'];
 
 async function handle(i) {
   if (i.isChatInputCommand()) {
@@ -452,7 +472,8 @@ async function handle(i) {
       inAttesa.set(i.user.id, { canale, menzione: m && m !== 'nessuno' ? m : '', ruolo: i.options.getRole('ruolo')?.id });
       return i.showModal(modalAnnuncio());
     }
-    if (i.commandName === 'link') return i.reply({ ...linkPannello(i.guild), flags: EPH });
+    if (i.commandName === 'link') return i.reply({ ...linkPannello(i.guild, 'ln'), flags: EPH });
+    if (i.commandName === 'link-ds') return i.reply({ ...linkPannello(i.guild, 'ld'), flags: EPH });
     if (i.commandName === 'sondaggi') { inAttesa.set(`sd:${i.user.id}`, canale); return i.showModal(modalSondaggio()); }
     if (i.commandName === 'giveaway') { inAttesa.set(`gw:${i.user.id}`, canale); return i.showModal(modalGiveaway()); }
   }
@@ -462,7 +483,7 @@ async function handle(i) {
   if (id === 'gwm') return creaGiveaway(i);
   if (id.startsWith('sd:')) return votaSondaggio(i);
   if (id.startsWith('gw:')) return bottoneGiveaway(i);
-  if (/^lnm?:/.test(id)) {
+  if (/^(ln|ld)m?:/.test(id)) {
     if (!staff(i)) return i.reply({ content: '❌ Non hai i permessi.', flags: EPH });
     return gestisciLink(i);
   }
@@ -472,14 +493,14 @@ module.exports = {
   init(cfgFn, saveFn) { cfg = cfgFn; save = saveFn; },
   commands,
   isCommunity: (i) => (i.isChatInputCommand() && NOMI.includes(i.commandName))
-    || /^(anm|sdm|gwm|sd:|gw:|lnm?:)/.test(i.customId ?? ''),
+    || /^(anm|sdm|gwm|sd:|gw:|lnm?:|ldm?:)/.test(i.customId ?? ''),
   handle,
   avviaTimer(client) {
     setInterval(() => controllaScadenze(client), 20 * 1000);
     controllaScadenze(client);
   },
-  onReady: (guild) => aggiornaLink(guild),
+  onReady: async (guild) => { await aggiornaLink(guild, 'ln'); await aggiornaLink(guild, 'ld'); },
   // per i test
   _durata: durata, _sondaggioMessaggio: sondaggioMessaggio, _giveawayMessaggio: giveawayMessaggio, _linkPannello: linkPannello,
-  _modals: () => [modalAnnuncio(), modalSondaggio(), modalGiveaway(), modalLink(null), modalLinkTesti(LINK_DEFAULT), modalLinkStile(LINK_DEFAULT)],
+  _modals: () => [modalAnnuncio(), modalSondaggio(), modalGiveaway(), modalLink('ln', null), modalLink('ld', null), modalLinkTesti('ld', PANNELLI.ld.def), modalLinkStile('ld', PANNELLI.ld.def)],
 };
