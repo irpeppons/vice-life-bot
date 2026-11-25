@@ -477,6 +477,7 @@ client.once('clientReady', async () => {
     await statoServer.onReady(g)?.catch?.(() => {});
     await wl.onReady(g).catch(() => {});
     await richiestaWl.onReady(g)?.catch?.(() => {});
+    await esitoWl.onReady(g).catch(() => {});
     if (cfg(g.id).stats) await updateStats(g);
   }
   setInterval(() => client.guilds.cache.forEach((g) => cfg(g.id).stats && scheduleStats(g)), UPDATE_EVERY_MS);

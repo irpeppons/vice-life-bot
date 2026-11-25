@@ -8,7 +8,7 @@
 const {
   ChannelType, MessageFlags, EmbedBuilder, SlashCommandBuilder,
   ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelSelectMenuBuilder,
-  ModalBuilder, TextInputBuilder, TextInputStyle,
+  ModalBuilder, TextInputBuilder, TextInputStyle, LabelBuilder, UserSelectMenuBuilder,
 } = require('discord.js');
 
 const EPH = MessageFlags.Ephemeral;
@@ -49,7 +49,7 @@ function pannello(guild, avviso = '') {
     content: '',
     embeds: [new EmbedBuilder().setColor(ROSA).setTitle('🎓 Esito Whitelist – VICE LIFE RP 🌴')
       .setDescription(
-        'Premi un pulsante e scrivi il **tag Discord** del player.\n\n' +
+        'Premi un pulsante e **cerca il player** nella lista (basta scrivere le prime lettere).\n\n' +
         `✅ **WL passata** → il bot gli dà <@&${RUOLO_WL_PASSATA}> e lo avvisa in privato\n` +
         '❌ **WL non superata** → scrivi **fra quante ore** può riprovarla e il bot glielo dice in privato\n\n' +
         `**Ultimi esiti:**\n${ultimi}` + (avviso ? `\n\n${avviso}` : ''),
@@ -87,26 +87,32 @@ const campo = (id, label, { style = TextInputStyle.Short, max = 100, placeholder
   if (placeholder) t.setPlaceholder(placeholder);
   return new ActionRowBuilder().addComponents(t);
 };
-const modalPassata = () => new ModalBuilder().setCustomId('ewm:ok').setTitle('✅ WL passata').addComponents(
-  campo('tag', 'Tag Discord del player', { placeholder: 'Es. ale_nox2 oppure @ale_nox2' }),
-  campo('note', 'Messaggio per il player (facoltativo)', { style: TextInputStyle.Paragraph, max: 1000, required: false, placeholder: 'Es. Ottima WL, benvenuto in città!' }),
+// Nel modulo: selettore del player con ricerca (scrivi le prime lettere e lo scegli dalla lista)
+const scegliPlayer = () => new LabelBuilder().setLabel('Player').setDescription('Scrivi le prime lettere del nome e sceglilo dalla lista')
+  .setUserSelectMenuComponent(new UserSelectMenuBuilder().setCustomId('player').setPlaceholder('🔎 Cerca il player...').setMinValues(1).setMaxValues(1));
+const testo = (id, label, { style = TextInputStyle.Short, max = 100, placeholder, required = true } = {}) => {
+  const t = new TextInputBuilder().setCustomId(id).setStyle(style).setRequired(required).setMaxLength(max);
+  if (placeholder) t.setPlaceholder(placeholder);
+  return new LabelBuilder().setLabel(label).setTextInputComponent(t);
+};
+const modalPassata = () => new ModalBuilder().setCustomId('ewm:ok').setTitle('✅ WL passata').addLabelComponents(
+  scegliPlayer(),
+  testo('note', 'Messaggio per il player (facoltativo)', { style: TextInputStyle.Paragraph, max: 1000, required: false, placeholder: 'Es. Ottima WL, benvenuto in città!' }),
 );
-const modalNonSuperata = () => new ModalBuilder().setCustomId('ewm:no').setTitle('❌ WL non superata').addComponents(
-  campo('tag', 'Tag Discord del player', { placeholder: 'Es. ale_nox2 oppure @ale_nox2' }),
-  campo('ore', 'Fra quante ore può rifare la WL?', { max: 4, placeholder: 'Es. 24' }),
-  campo('motivo', 'Motivo (facoltativo)', { style: TextInputStyle.Paragraph, max: 1000, required: false, placeholder: 'Es. Ripassa i termini RP: metagaming e powergaming' }),
+const modalNonSuperata = () => new ModalBuilder().setCustomId('ewm:no').setTitle('❌ WL non superata').addLabelComponents(
+  scegliPlayer(),
+  testo('ore', 'Fra quante ore può rifare la WL?', { max: 4, placeholder: 'Es. 24' }),
+  testo('motivo', 'Motivo (facoltativo)', { style: TextInputStyle.Paragraph, max: 1000, required: false, placeholder: 'Es. Ripassa i termini RP: metagaming e powergaming' }),
 );
 
 async function registraEsito(i, esito) {
   const g = i.guild; const d = get(g.id);
   const v = (k) => i.fields.getTextInputValue(k).trim();
   await i.deferReply({ flags: EPH });
-  const trovato = await trovaPlayer(g, v('tag'));
-  if (!trovato) return i.editReply(`❌ Non trovo nessun player con il tag **${v('tag')}** nel server. Controlla di averlo scritto giusto.`);
-  if (trovato.multipli) {
-    return i.editReply(`⚠️ Ho trovato più player con quel nome, scrivi il tag esatto o l'ID:\n${trovato.multipli.map((m) => `• ${m.user.username} (${m.displayName}) – \`${m.id}\``).join('\n')}`);
-  }
-  const player = trovato;
+  const scelto = i.fields.getSelectedUsers('player')?.first();
+  const player = scelto ? await g.members.fetch(scelto.id).catch(() => null) : null;
+  if (!player) return i.editReply('❌ Questo player non è più nel server.');
+  if (player.user.bot) return i.editReply('❌ Hai scelto un bot.');
 
   if (esito === 'ok') {
     let ruolo = '✅ Ruolo dato';
@@ -177,5 +183,6 @@ module.exports = {
     .setDMPermission(false).toJSON(),
   isEsito: (i) => (i.isChatInputCommand() && i.commandName === 'esito-wl') || /^ewm?:/.test(i.customId ?? ''),
   handle, attesaRiprova,
+  onReady: (guild) => aggiornaPannelloFisso(guild), // aggiorna il pannello fisso all'avvio
   _pannello: pannello, _pannelloComando: pannelloComando, _trovaPlayer: trovaPlayer, _modals: () => [modalPassata(), modalNonSuperata()],
 };
