@@ -252,7 +252,7 @@ function sondaggioMessaggio(s) {
   const stato = s.chiuso ? '🏁 **Sondaggio chiuso**' : s.fine ? `⏰ Termina <t:${ts(s.fine)}:R>` : '🟢 Sondaggio aperto';
   const e = new EmbedBuilder().setColor(s.chiuso ? '#777777' : ROSA).setTitle(`📊 ${s.domanda}`.slice(0, 256))
     .setDescription(`${s.descrizione ? `${s.descrizione}\n\n` : ''}${righe.join('\n\n')}\n\n${stato}`.slice(0, 4096))
-    .setFooter({ text: `${tot} ${tot === 1 ? 'voto' : 'voti'} • 1 voto per player • Voto anonimo` });
+    .setFooter({ text: `${tot} ${tot === 1 ? 'voto' : 'voti'} • 1 voto per player • Puoi cambiare idea • Voto anonimo` });
   const rows = [];
   if (!s.chiuso) {
     s.opzioni.forEach((o, n) => {
@@ -303,13 +303,16 @@ async function votaSondaggio(i) {
     s.chiuso = true; save();
     return i.update(sondaggioMessaggio(s));
   }
-  if (s.voti[i.user.id] !== undefined) {
-    return i.reply({ content: `⚠️ Hai già votato: **${s.opzioni[s.voti[i.user.id]]}**. Si può votare una sola volta.`, flags: EPH });
-  }
-  s.voti[i.user.id] = Number(scelta);
+  // 1 voto per player, ma si può cambiare idea (o togliere il voto premendo di nuovo la stessa risposta)
+  const prima = s.voti[i.user.id];
+  const n = Number(scelta);
+  let msg;
+  if (prima === n) { delete s.voti[i.user.id]; msg = `↩️ Hai tolto il tuo voto (**${s.opzioni[n]}**).`; }
+  else if (prima !== undefined) { s.voti[i.user.id] = n; msg = `🔄 Hai cambiato idea: da **${s.opzioni[prima]}** a **${s.opzioni[n]}**.`; }
+  else { s.voti[i.user.id] = n; msg = `✅ Hai votato: **${s.opzioni[n]}**. Puoi cambiare idea quando vuoi.`; }
   save();
   await i.update(sondaggioMessaggio(s));
-  return i.followUp({ content: `✅ Hai votato: **${s.opzioni[Number(scelta)]}**`, flags: EPH });
+  return i.followUp({ content: msg, flags: EPH });
 }
 
 // ================================================
