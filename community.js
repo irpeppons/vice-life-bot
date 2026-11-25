@@ -477,16 +477,16 @@ async function inviaSpoiler(i) {
 
 // Quando uno spoiler arriva all'obiettivo di interazioni -> annuncio automatico
 async function onReaction(reaction, user) {
-  if (user.bot || !reaction.message.guildId) return;
+  if (!reaction.message.guildId) return;
   const sp = cfg(reaction.message.guildId).spoiler?.[reaction.message.id];
   if (!sp || sp.raggiunto) return;
   try {
     if (reaction.partial) await reaction.fetch();
     const msg = reaction.message.partial ? await reaction.message.fetch() : reaction.message;
-    // Conta le persone diverse che hanno reagito (bot esclusi)
+    // Conta chi ha reagito (anche la reazione del bot); ogni persona conta una volta
     const persone = new Set();
     for (const r of msg.reactions.cache.values()) {
-      (await r.users.fetch()).forEach((u) => { if (!u.bot) persone.add(u.id); });
+      (await r.users.fetch()).forEach((u) => persone.add(u.id));
     }
     if (persone.size < sp.obiettivo || sp.raggiunto) return;
     sp.raggiunto = true;
