@@ -33,6 +33,8 @@ const tickets = require('./tickets');
 tickets.init(cfg, save);
 const idfissi = require('./idfissi');
 idfissi.init(cfg, save);
+const memoria = require('./memoria');
+memoria.init(cfg, save);
 
 // ---------- statistiche ----------
 const STATS = [
@@ -373,13 +375,20 @@ function autoruoliPanel(guild, warning = '') {
     content: (
       `## 🎭 Autoruoli – ${BOT_NAME}
 ` +
-      `Chi entra nel server riceve in automatico:
+      `Chi entra nel server per la prima volta riceve in automatico:
 ` +
       (validi.length ? validi.map((r) => `• <@&${r}>`).join('\n') : '*nessun ruolo*') +
       `\n\n⚠️ Il ruolo **${BOT_NAME}** deve stare **sopra** questi ruoli (Impostazioni server → Ruoli).` +
       (warning ? `\n\n${warning}` : '')
     ).slice(0, 2000),
-    components: [new ActionRowBuilder().addComponents(select)],
+    components: [
+      new ActionRowBuilder().addComponents(select),
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('ar:memoria')
+          .setLabel(memoria.attiva(guild.id) ? 'Rimetti vecchi ruoli a chi rientra: ON' : 'Rimetti vecchi ruoli a chi rientra: OFF')
+          .setEmoji('♻️').setStyle(memoria.attiva(guild.id) ? ButtonStyle.Success : ButtonStyle.Secondary),
+      ),
+    ],
   };
 }
 
@@ -435,6 +444,7 @@ client.once('clientReady', async () => {
   for (const g of client.guilds.cache.values()) {
     await nascondiMessaggioIngresso(g);
     await g.members.fetch().catch(() => {});
+    memoria.salvaTutti(g);
     if (cfg(g.id).stats) await updateStats(g);
   }
   setInterval(() => client.guilds.cache.forEach((g) => cfg(g.id).stats && scheduleStats(g)), UPDATE_EVERY_MS);
@@ -443,13 +453,21 @@ client.once('clientReady', async () => {
 client.on('guildCreate', (g) => nascondiMessaggioIngresso(g));
 client.on('guildMemberAdd', async (member) => {
   console.log(`👋 Nuovo membro: ${member.user.username}`);
+  const vecchioNick = await memoria.ripristina(member);
   await giveAutoruoli(member);
-  await idfissi.onJoin(member);
+  await idfissi.onJoin(member, vecchioNick);
+  memoria.salva(member);
   await sendWelcome(member).catch((e) => console.warn(`[benvenuto] ${member.guild.name}: ${e.message}`));
   scheduleStats(member.guild);
 });
-client.on('guildMemberUpdate', (oldM, newM) => idfissi.onUpdate(oldM, newM).catch(() => {}));
-client.on('guildMemberRemove', (member) => scheduleStats(member.guild));
+client.on('guildMemberUpdate', async (oldM, newM) => {
+  await idfissi.onUpdate(oldM, newM).catch(() => {});
+  memoria.salva(newM);
+});
+client.on('guildMemberRemove', (member) => {
+  memoria.salva(member); // ruoli e nickname restano salvati per quando rientra
+  scheduleStats(member.guild);
+});
 
 client.on('interactionCreate', async (i) => {
   if (!i.guild) return;
@@ -460,6 +478,11 @@ client.on('interactionCreate', async (i) => {
     if (idfissi.isId(i)) return await idfissi.handle(i);
 
     // Pannello autoruoli
+    if (i.customId === 'ar:memoria') {
+      if (!i.memberPermissions?.has(PermissionFlagsBits.ManageRoles)) return i.reply({ content: '❌ Non hai i permessi.', flags: EPHEMERAL });
+      const on = memoria.toggle(i.guild.id);
+      return i.update(autoruoliPanel(i.guild, on ? '♻️ Chi rientra riavrà i suoi vecchi ruoli.' : '♻️ Ripristino ruoli disattivato.'));
+    }
     if (i.customId === 'ar:set') {
       if (!i.memberPermissions?.has(PermissionFlagsBits.ManageRoles)) return i.reply({ content: '❌ Non hai i permessi.', flags: EPHEMERAL });
       cfg(i.guild.id).autoruoli = i.values;

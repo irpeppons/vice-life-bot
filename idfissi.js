@@ -63,11 +63,13 @@ async function applyNick(member, base) {
 }
 
 // ---------- eventi ----------
-async function onJoin(member) {
+async function onJoin(member, vecchioNick = null) {
   if (member.user.bot || !get(member.guild.id).attivo) return;
   idOf(member);
   try {
-    const ok = await applyNick(member, member.user.globalName ?? member.user.username);
+    // Se rientra, riprende il suo vecchio nome (es. nome RP) con lo stesso ID
+    const base = vecchioNick ? baseName(member, vecchioNick) : (member.user.globalName ?? member.user.username);
+    const ok = await applyNick(member, base);
     console.log(ok ? `🆔 ${member.user.username} -> ${member.nickname ?? nickFor(member, member.user.username)}`
       : `⚠️ [id] Non posso rinominare ${member.user.username}: il ruolo VICE LIFE🌴 deve stare SOPRA i suoi ruoli`);
   } catch (e) {
