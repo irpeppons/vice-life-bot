@@ -7,11 +7,12 @@
 const path = require('path');
 const {
   ChannelType, PermissionFlagsBits, MessageFlags, EmbedBuilder, SlashCommandBuilder, AttachmentBuilder,
-  ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelSelectMenuBuilder, RoleSelectMenuBuilder,
+  ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelSelectMenuBuilder,
   ModalBuilder, TextInputBuilder, TextInputStyle,
 } = require('discord.js');
 
 const EPH = MessageFlags.Ephemeral;
+const RUOLO_PING = '1575145370600611870'; // taggato nel messaggio dello stato
 let cfg; let save;
 
 const STATI = {
@@ -53,7 +54,21 @@ function messaggioStato(guild, s) {
   const file = BANNERS[(s.immagine || '').toLowerCase()];
   if (file) { e.setImage(`attachment://${file}`); files.push(new AttachmentBuilder(path.join(__dirname, file), { name: file })); }
   else if (isUrl(s.immagine)) e.setImage(s.immagine);
-  return { embeds: [e], files, attachments: [] };
+  return { content: `<@&${RUOLO_PING}>`, embeds: [e], files, attachments: [], allowedMentions: { roles: [RUOLO_PING] } };
+}
+
+// Ripubblica il messaggio dello stato (cancella il vecchio): così il ruolo riceve il ping
+// e in chat resta sempre un solo messaggio, senza scritte in più.
+async function ripubblica(guild, canaleId) {
+  const s = get(guild.id);
+  const ch = await guild.channels.fetch(canaleId);
+  const msg = await ch.send(messaggioStato(guild, s));
+  if (s.pubblicato) {
+    const old = await guild.channels.fetch(s.pubblicato.canale).catch(() => null);
+    await old?.messages.delete(s.pubblicato.messaggio).catch(() => {});
+  }
+  s.pubblicato = { canale: ch.id, messaggio: msg.id };
+  save();
 }
 
 async function aggiornaPubblicato(guild) {
@@ -62,7 +77,8 @@ async function aggiornaPubblicato(guild) {
   try {
     const ch = await guild.channels.fetch(s.pubblicato.canale);
     const msg = await ch.messages.fetch(s.pubblicato.messaggio);
-    await msg.edit({ ...messaggioStato(guild, s), components: [] });
+    const { allowedMentions, ...dati } = messaggioStato(guild, s);
+    await msg.edit({ ...dati, components: [] });
     return true;
   } catch { return false; }
 }
@@ -75,28 +91,21 @@ function pannello(guild, avviso = '') {
       ...Object.entries(STATI).map(([k, x]) => new ButtonBuilder().setCustomId(`st:set:${k}`)
         .setLabel(x.nome.replace('IN ', '')).setEmoji(x.emoji).setStyle(k === s.stato ? x.stile : ButtonStyle.Secondary)),
       new ButtonBuilder().setCustomId('st:testi').setLabel('Testi & banner').setEmoji('✏️').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId('st:avvisi').setLabel(s.avvisi ? 'Avviso cambio: ON' : 'Avviso cambio: OFF')
-        .setEmoji('🔔').setStyle(s.avvisi ? ButtonStyle.Success : ButtonStyle.Secondary),
     ),
     new ActionRowBuilder().addComponents(new ChannelSelectMenuBuilder().setCustomId('st:pubblica')
       .setPlaceholder('📢 Pubblica lo stato in un canale...').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)),
-    new ActionRowBuilder().addComponents((() => {
-      const r = new RoleSelectMenuBuilder().setCustomId('st:ruolo').setPlaceholder('🔔 Ruolo da taggare quando cambia lo stato (facoltativo)')
-        .setMinValues(0).setMaxValues(1);
-      if (s.ruolo && guild.roles.cache.has(s.ruolo)) r.setDefaultRoles(s.ruolo);
-      return r;
-    })()),
   ];
+  const { content: _ping, allowedMentions: _am, ...anteprima } = messaggioStato(guild, s);
   return {
+    ...anteprima,
     content: (
       `## 🖥️ Stato Server – VICE LIFE🌴\n` +
       `Stato attuale: ${st.emoji} **${st.nome}**\n` +
       `${s.pubblicato ? `📌 Pubblicato in <#${s.pubblicato.canale}> (si aggiorna da solo)` : '📌 *Non ancora pubblicato*'}\n` +
-      `🔔 Avviso quando cambia: **${s.avvisi ? 'ON' : 'OFF'}**${s.ruolo ? ` (tagga <@&${s.ruolo}>)` : ''}\n\n` +
+      `🔔 A ogni cambio il messaggio viene ripubblicato e tagga <@&${RUOLO_PING}>\n\n` +
       `Premi 🟢 / 🔴 / 🟠 per cambiare lo stato. 👇 **Anteprima:**` +
       (avviso ? `\n\n${avviso}` : '')
     ).slice(0, 2000),
-    ...messaggioStato(guild, s),
     components: rows,
   };
 }
@@ -130,32 +139,19 @@ async function handle(i) {
     s.stato = c;
     s.cambiato = Date.now();
     save();
-    const ok = await aggiornaPubblicato(g);
-    // Avviso nel canale dello stato quando cambia
-    if (s.avvisi && s.pubblicato) {
-      const ch = await g.channels.fetch(s.pubblicato.canale).catch(() => null);
-      await ch?.send({
-        content: `${s.ruolo ? `<@&${s.ruolo}> ` : ''}${STATI[c].emoji} **Il server ora è ${STATI[c].nome}!**`,
-        allowedMentions: { roles: s.ruolo ? [s.ruolo] : [] },
-      }).catch(() => {});
-    }
-    return i.update(pannello(g, ok ? `✅ Stato cambiato: ${STATI[c].emoji} **${STATI[c].nome}**` : '⚠️ Stato salvato, ma non trovo il messaggio pubblicato: ripubblicalo.'));
+    let avviso = `✅ Stato cambiato: ${STATI[c].emoji} **${STATI[c].nome}**`;
+    if (s.pubblicato) {
+      try { await ripubblica(g, s.pubblicato.canale); avviso += ` • <@&${RUOLO_PING}> avvisato`; }
+      catch { avviso += '\n⚠️ Non trovo il canale dello stato: ripubblicalo dal menu 📢.'; }
+    } else avviso += '\n📢 Pubblicalo in un canale dal menu qui sotto.';
+    return i.update(pannello(g, avviso));
   }
   if (b === 'testi' && a === 'st') return i.showModal(modalTesti(s));
-  if (b === 'avvisi') { s.avvisi = !s.avvisi; return fatto(s.avvisi ? '🔔 Avviso attivato.' : '🔕 Avviso disattivato.'); }
-  if (b === 'ruolo') { s.ruolo = i.values[0] ?? null; return fatto(s.ruolo ? `✅ Quando cambia lo stato verrà taggato <@&${s.ruolo}>.` : '✅ Nessun ruolo verrà taggato.'); }
   if (b === 'pubblica') {
-    const ch = g.channels.cache.get(i.values[0]);
     try {
-      const msg = await ch.send(messaggioStato(g, s));
-      if (s.pubblicato) {
-        const old = await g.channels.fetch(s.pubblicato.canale).catch(() => null);
-        await old?.messages.delete(s.pubblicato.messaggio).catch(() => {});
-      }
-      s.pubblicato = { canale: ch.id, messaggio: msg.id };
-      save();
-      return i.update(pannello(g, `✅ Stato pubblicato in <#${ch.id}>! Resta lì e si aggiorna da solo.`));
-    } catch (e) { return i.update(pannello(g, `❌ Non posso scrivere in <#${ch.id}>: ${e.message}`)); }
+      await ripubblica(g, i.values[0]);
+      return i.update(pannello(g, `✅ Stato pubblicato in <#${i.values[0]}>! Resta lì e si aggiorna da solo.`));
+    } catch (e) { return i.update(pannello(g, `❌ Non posso scrivere in <#${i.values[0]}>: ${e.message}`)); }
   }
   if (a === 'stm' && b === 'testi') {
     const v = (k) => i.fields.getTextInputValue(k).trim();
