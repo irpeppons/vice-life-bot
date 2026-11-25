@@ -12,6 +12,7 @@ const {
 
 const EPH = MessageFlags.Ephemeral;
 const CANALE_WL = '1575150437580148826';
+const RUOLO_PING = '1575145370600611870'; // taggato nel messaggio della whitelist
 const ROSA = '#ff2d95';
 let cfg; let save;
 
@@ -54,6 +55,8 @@ function messaggio(guild, w) {
     return e;
   });
   return {
+    content: `<@&${RUOLO_PING}>`,
+    allowedMentions: { roles: [RUOLO_PING] },
     embeds: [banner, ...sezioni],
     files: [new AttachmentBuilder(path.join(__dirname, 'banner-vicelife.jpg'), { name: 'banner-vicelife.jpg' })],
     attachments: [],
@@ -155,10 +158,16 @@ async function handle(i) {
 // All'avvio: se non è ancora pubblicato lo pubblica nel canale WL, altrimenti lo aggiorna
 async function onReady(guild) {
   const w = get(guild.id);
-  if (w.pubblicato) return aggiorna(guild);
+  if (w.pubblicato && w.ping) return aggiorna(guild);
+  if (w.pubblicato) { // già pubblicato senza tag: lo ripubblica una volta, così il ruolo riceve la notifica
+    try { await pubblica(guild, w.pubblicato.canale); w.ping = true; save(); console.log('📋 Info whitelist ripubblicate con il tag del ruolo'); }
+    catch (e) { console.warn(`[wl] ${e.message}`); }
+    return null;
+  }
   if (!guild.channels.cache.has(w.canale)) return null;
   try {
     await pubblica(guild, w.canale);
+    w.ping = true; save();
     console.log(`📋 Info whitelist pubblicate in #${guild.channels.cache.get(w.canale)?.name}`);
   } catch (e) { console.warn(`[wl] ${e.message}`); }
   return null;
