@@ -145,7 +145,7 @@ function adminPanel(guild, warning = '') {
   const pub = t.pubblicato ? `📌 Pubblicato in <#${t.pubblicato.canale}> (si aggiorna da solo)` : '📌 *Non ancora pubblicato*';
   const content = (
     `## 🎫 Pannello Ticket – VICE LIFE🌴\n${pub}  •  Modalità: **${t.modalita === 'menu' ? 'Menu a tendina' : 'Pulsanti'}**\n\n` +
-    `👮 **Staff che vede tutti i ticket:** ${staffValidi.length ? staffValidi.map((r) => `<@&${r}>`).join(' ') : '*nessuno*'}\n\n` +
+    `👮 **Staff che vede tutti i ticket** (modifica con il pulsante 👮 Staff): ${staffValidi.length ? staffValidi.map((r) => `<@&${r}>`).join(' ') : '*nessuno*'}\n\n` +
     `**Tipi di ticket:**\n${tipi}\n\n👇 **Anteprima del pannello pubblico:**` +
     (warning ? `\n\n${warning}` : '')
   ).slice(0, 2000);
@@ -167,20 +167,50 @@ function adminPanel(guild, warning = '') {
       new ButtonBuilder().setCustomId('tk:stile').setLabel('Colore & Immagini').setEmoji('🎨').setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId('tk:add').setLabel('Aggiungi tipo').setEmoji('➕').setStyle(ButtonStyle.Success).setDisabled(t.tipi.length >= 25),
       new ButtonBuilder().setCustomId('tk:mode').setLabel(t.modalita === 'menu' ? 'Usa pulsanti' : 'Usa menu a tendina').setEmoji('🔁').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId('tk:aggiorna').setLabel('Aggiorna pubblicato').setEmoji('🔄').setStyle(ButtonStyle.Secondary).setDisabled(!t.pubblicato),
+      new ButtonBuilder().setCustomId('tk:staffpanel').setLabel('Staff').setEmoji('👮').setStyle(ButtonStyle.Secondary),
     ),
     new ActionRowBuilder().addComponents(
       new ChannelSelectMenuBuilder().setCustomId('tk:pubblica').setPlaceholder('📢 Pubblica il pannello in un canale...')
         .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement),
     ),
-    new ActionRowBuilder().addComponents((() => {
-      const sel = new RoleSelectMenuBuilder().setCustomId('tk:staff')
-        .setPlaceholder('👮 Staff che vede TUTTI i ticket').setMinValues(0).setMaxValues(25);
-      if (staffValidi.length) sel.setDefaultRoles(...staffValidi.slice(0, 25));
-      return sel;
-    })()),
   );
   return { content, embeds: [publicEmbed(guild, t)], components, files: bannerFiles(t), attachments: [] };
+}
+
+// Due menu: uno per AGGIUNGERE ruoli (mostra tutti i ruoli) e uno per TOGLIERLI
+function righeRuoli(guild, lista, idAdd, idDel, cosa) {
+  const righe = [new ActionRowBuilder().addComponents(
+    new RoleSelectMenuBuilder().setCustomId(idAdd).setPlaceholder(`➕ Aggiungi ruoli ${cosa}`).setMinValues(1).setMaxValues(25),
+  )];
+  const validi = lista.filter((r) => guild.roles.cache.has(r)).slice(0, 25);
+  if (validi.length) {
+    righe.push(new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder().setCustomId(idDel).setPlaceholder(`➖ Togli ruoli ${cosa}`)
+        .setMinValues(1).setMaxValues(validi.length)
+        .addOptions(validi.map((r) => ({ label: guild.roles.cache.get(r).name.slice(0, 100), value: r }))),
+    ));
+  }
+  return righe;
+}
+
+function staffPanel(guild, warning = '') {
+  const t = get(guild.id);
+  const validi = t.staff.filter((r) => guild.roles.cache.has(r));
+  return {
+    content: (
+      `## 👮 Staff che vede TUTTI i ticket (${validi.length}/25)\n` +
+      (validi.length ? validi.map((r) => `• <@&${r}>`).join('\n') : '*nessun ruolo*') +
+      '\n\n➕ Usa il primo menu per **aggiungere** ruoli, ➖ il secondo per **toglierli**.' +
+      (warning ? `\n\n${warning}` : '')
+    ).slice(0, 2000),
+    embeds: [], files: [], attachments: [],
+    components: [
+      ...righeRuoli(guild, t.staff, 'tk:staffadd', 'tk:staffdel', 'allo staff'),
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('tk:back').setLabel('Indietro').setEmoji('⬅️').setStyle(ButtonStyle.Secondary),
+      ),
+    ],
+  };
 }
 
 function tipoPanel(guild, tipo, warning = '') {
@@ -197,16 +227,12 @@ function tipoPanel(guild, tipo, warning = '') {
   const cat = new ChannelSelectMenuBuilder().setCustomId(`tk:cat:${tipo.id}`)
     .setPlaceholder('📁 Categoria dove vanno questi ticket').addChannelTypes(ChannelType.GuildCategory);
   if (tipo.categoria && guild.channels.cache.has(tipo.categoria)) cat.setDefaultChannels(tipo.categoria);
-  const ruoli = new RoleSelectMenuBuilder().setCustomId(`tk:ruoli:${tipo.id}`)
-    .setPlaceholder('👮 Staff in più solo per questo tipo').setMinValues(0).setMaxValues(25);
-  const validRoles = tipo.ruoli.filter((r) => guild.roles.cache.has(r));
-  if (validRoles.length) ruoli.setDefaultRoles(...validRoles);
 
   return {
     content, embeds: [], files: [], attachments: [],
     components: [
       new ActionRowBuilder().addComponents(cat),
-      new ActionRowBuilder().addComponents(ruoli),
+      ...righeRuoli(guild, tipo.ruoli, `tk:ruoliadd:${tipo.id}`, `tk:ruolidel:${tipo.id}`, 'staff solo per questo tipo'),
       new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`tk:edit:${tipo.id}`).setLabel('Modifica testi').setEmoji('✏️').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`tk:colbtn:${tipo.id}`).setLabel('Colore pulsante').setEmoji('🎨').setStyle(ButtonStyle[tipo.stile] ?? ButtonStyle.Primary),
@@ -254,10 +280,11 @@ async function handleAdmin(i) {
   const g = i.guild;
   const t = get(g.id);
   const [a, b, id] = i.customId.split(':');
-  const done = async (warning, tipo) => {
+  const done = async (warning, tipo, vista) => {
     save();
     const ok = await refreshPublished(g);
     const w = ok ? warning : `${warning}\n⚠️ Non trovo più il pannello pubblicato: ripubblicalo dal menu 📢.`;
+    if (vista === 'staff') return i.update(staffPanel(g, w));
     return i.update(tipo ? tipoPanel(g, tipo, w) : adminPanel(g, w));
   };
 
@@ -299,12 +326,21 @@ async function handleAdmin(i) {
       const tipo = findTipo(t, i.values[0]);
       return i.update(tipo ? confermaElimina(tipo) : adminPanel(g, '⚠️ Tipo non trovato.'));
     }
-    if (b === 'staff') { t.staff = i.values; return done('✅ Staff generale aggiornato: vedrà tutti i ticket.'); }
+    if (b === 'staffpanel') return i.update(staffPanel(g));
+    if (b === 'staffadd') {
+      t.staff = [...new Set([...t.staff, ...i.values])].slice(0, 25);
+      return done(`✅ Aggiunti: ${i.values.map((r) => `<@&${r}>`).join(' ')}`, null, 'staff');
+    }
+    if (b === 'staffdel') {
+      t.staff = t.staff.filter((r) => !i.values.includes(r));
+      return done(`➖ Tolti: ${i.values.map((r) => `<@&${r}>`).join(' ')}`, null, 'staff');
+    }
 
     const tipo = findTipo(t, id);
     if (!tipo) return i.update(adminPanel(g, '⚠️ Tipo non trovato.'));
     if (b === 'cat') { tipo.categoria = i.values[0] ?? null; return done(`✅ I ticket **${tipo.nome}** andranno in <#${tipo.categoria}>.`, tipo); }
-    if (b === 'ruoli') { tipo.ruoli = i.values; return done('✅ Ruoli staff aggiornati.', tipo); }
+    if (b === 'ruoliadd') { tipo.ruoli = [...new Set([...tipo.ruoli, ...i.values])].slice(0, 25); return done('✅ Ruoli aggiunti.', tipo); }
+    if (b === 'ruolidel') { tipo.ruoli = tipo.ruoli.filter((r) => !i.values.includes(r)); return done('➖ Ruoli tolti.', tipo); }
     if (b === 'edit') return i.showModal(modalTipo(tipo));
     if (b === 'colbtn') {
       tipo.stile = STILI[(STILI.indexOf(tipo.stile) + 1) % STILI.length];
