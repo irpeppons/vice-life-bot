@@ -1,0 +1,14 @@
+{
+  "name": "vice-life-bot",
+  "version": "1.0.0",
+  "description": "VICE LIFE🌴 - Bot Discord per server RP: categoria statistiche (/lista) e messaggio di benvenuto personalizzato",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^0.1.100",
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.5"
+  }
+}
