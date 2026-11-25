@@ -450,15 +450,17 @@ async function inviaSpoiler(i) {
   const fondo = `${emoji ? `${emoji}\n` : ''}**Arriviamo a 10 interazioni per il prossimo spoiler!**`;
   const testo = [v('titolo') ? `## ${v('titolo')}` : '', v('descrizione'), ping, `\n${fondo}`].filter(Boolean).join('\n').slice(0, 2000);
   // Il prefisso SPOILER_ fa apparire l'immagine sfocata finché non ci premi sopra
-  const files = opz.immagini.map((a, n) => new AttachmentBuilder(a.url, { name: `SPOILER_${n + 1}_${a.name}`.slice(0, 100) }));
+  const files = opz.immagini.map((a, n) => new AttachmentBuilder(a.url, { name: `SPOILER_${n + 1}_${a.name}`.slice(0, 100) }).setSpoiler(true));
   const ch = i.guild.channels.cache.get(opz.canale);
   try {
     const msg = await ch.send({
       content: testo || undefined, files,
       allowedMentions: { parse: opz.menzione ? ['everyone'] : [], roles: opz.ruolo ? [opz.ruolo] : [] },
     });
-    if (emoji) await msg.react(emoji).catch(() => {}); // prima reazione, così i player la cliccano
-    return i.editReply(`✅ Spoiler pubblicato: ${msg.url}${emoji ? '' : '\n⚠️ Non trovo l\'emoji 1575192806618570885 in questo server.'}`);
+    // Reazioni automatiche del bot, così i player ci cliccano sopra
+    await msg.react('✅').catch(() => {});
+    if (emoji) await msg.react(emoji).catch(() => {});
+    return i.editReply(`✅ Spoiler pubblicato: ${msg.url}`);
   } catch (err) {
     return i.editReply(`❌ Non riesco a pubblicare lo spoiler in <#${opz.canale}>: ${err.message}`);
   }
