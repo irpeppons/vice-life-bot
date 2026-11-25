@@ -62,7 +62,8 @@ function get(gid) {
   return t;
 }
 // Tutti i ruoli staff di un tipo: staff generale + ruoli del tipo
-const staffDi = (t, tipo) => [...new Set([...(t.staff ?? []), ...(tipo?.ruoli ?? [])])];
+// Chi vede un ticket: se il tipo ha ruoli scelti, SOLO quelli; altrimenti tutto lo staff generale
+const staffDi = (t, tipo) => (tipo?.ruoli?.length ? tipo.ruoli : (t.staff ?? []));
 const isUrl = (s) => /^https?:\/\/\S+$/i.test(s);
 const isEmoji = (s) => /^<a?:\w{2,32}:\d{17,20}>$/.test(s)
   || (s.length <= 16 && /\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(s) && !/[a-z]/i.test(s));
@@ -178,10 +179,23 @@ function adminPanel(guild, warning = '') {
 }
 
 // Due menu: uno per AGGIUNGERE ruoli (mostra tutti i ruoli) e uno per TOGLIERLI
-function righeRuoli(guild, lista, idAdd, idDel, cosa) {
-  const righe = [new ActionRowBuilder().addComponents(
-    new RoleSelectMenuBuilder().setCustomId(idAdd).setPlaceholder(`➕ Aggiungi ruoli ${cosa}`).setMinValues(1).setMaxValues(25),
-  )];
+// scelte = null -> menu con tutti i ruoli del server; array -> menu solo con quei ruoli
+function righeRuoli(guild, lista, idAdd, idDel, cosa, scelte = null) {
+  const righe = [];
+  if (!scelte) {
+    righe.push(new ActionRowBuilder().addComponents(
+      new RoleSelectMenuBuilder().setCustomId(idAdd).setPlaceholder(`➕ Aggiungi ruoli ${cosa}`).setMinValues(1).setMaxValues(25),
+    ));
+  } else {
+    const disponibili = scelte.filter((r) => guild.roles.cache.has(r) && !lista.includes(r)).slice(0, 25);
+    if (disponibili.length) {
+      righe.push(new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder().setCustomId(idAdd).setPlaceholder(`➕ Aggiungi ruoli ${cosa}`)
+          .setMinValues(1).setMaxValues(disponibili.length)
+          .addOptions(disponibili.map((r) => ({ label: guild.roles.cache.get(r).name.slice(0, 100), value: r }))),
+      ));
+    }
+  }
   const validi = lista.filter((r) => guild.roles.cache.has(r)).slice(0, 25);
   if (validi.length) {
     righe.push(new ActionRowBuilder().addComponents(
@@ -219,9 +233,9 @@ function tipoPanel(guild, tipo, warning = '') {
     `## ${tipoLabel(tipo)} – impostazioni tipo\n` +
     `📝 Descrizione: ${tipo.descrizione || '*nessuna*'}\n` +
     `📁 Categoria dei ticket: ${tipo.categoria ? `<#${tipo.categoria}>` : '⚠️ *nessuna (scegline una qui sotto)*'}\n` +
-    `👮 **Staff che vede questi ticket** (staff generale, si cambia con il pulsante 👮 Staff del pannello):\n` +
-    `${staffGen.length ? staffGen.map((r) => `<@&${r}>`).join(' ') : '*nessuno*'}\n` +
-    `➕ Staff in più solo per questo tipo: ${tipo.ruoli.length ? tipo.ruoli.map((r) => `<@&${r}>`).join(' ') : '*nessuno*'}\n` +
+    (tipo.ruoli.length
+      ? `👮 **Vedono questi ticket SOLO:** ${tipo.ruoli.map((r) => `<@&${r}>`).join(' ')}\n`
+      : `👮 **Vedono questi ticket:** tutto lo staff (${staffGen.length} ruoli). Scegli dei ruoli qui sotto se vuoi che li veda solo una parte dello staff.\n`) +
     `🎨 Colore pulsante: ${STILI_NOME[tipo.stile] ?? STILI_NOME.Primary}\n\n` +
     `💬 **Messaggio dentro il ticket:**\n${tipo.messaggio || '*nessuno*'}` +
     (warning ? `\n\n${warning}` : '')
@@ -235,7 +249,7 @@ function tipoPanel(guild, tipo, warning = '') {
     content, embeds: [], files: [], attachments: [],
     components: [
       new ActionRowBuilder().addComponents(cat),
-      ...righeRuoli(guild, tipo.ruoli, `tk:ruoliadd:${tipo.id}`, `tk:ruolidel:${tipo.id}`, 'staff solo per questo tipo'),
+      ...righeRuoli(guild, tipo.ruoli, `tk:ruoliadd:${tipo.id}`, `tk:ruolidel:${tipo.id}`, 'staff per questo tipo', get(guild.id).staff),
       new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`tk:edit:${tipo.id}`).setLabel('Modifica testi').setEmoji('✏️').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`tk:colbtn:${tipo.id}`).setLabel('Colore pulsante').setEmoji('🎨').setStyle(ButtonStyle[tipo.stile] ?? ButtonStyle.Primary),
