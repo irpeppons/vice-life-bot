@@ -453,7 +453,7 @@ const commands = [
     .setDescription('Scegli i ruoli che ricevono in automatico i nuovi membri')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
     .setDMPermission(false),
-].map((c) => c.toJSON()).concat(tickets.command, idfissi.commands, community.commands, statoServer.command, wl.command, richiestaWl.command, esitoWl.command, storie.command);
+].map((c) => c.toJSON()).concat(tickets.command, idfissi.commands, community.commands, statoServer.command, wl.command, richiestaWl.command, esitoWl.command, storie.command, voce.command);
 
 // ---------- client ----------
 const client = new Client({
@@ -525,6 +525,8 @@ client.on('interactionCreate', async (i) => {
   try {
     // Sistema ticket
     if (tickets.isTicket(i)) return await tickets.handle(i);
+    // Prova audio sala d'attesa
+    if (voce.isVoce(i)) return await voce.handle(i);
     // Storie dei personaggi
     if (storie.isStoria(i)) return await storie.handle(i);
     // Esito whitelist

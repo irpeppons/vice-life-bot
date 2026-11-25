@@ -97,9 +97,14 @@ function onVoiceUpdate(oldState, newState) {
   if (!member || member.user.bot) return;
   if (newState.channelId !== CANALE_ATTESA || oldState.channelId === CANALE_ATTESA) return;
   if (rientri.has(member.id) || inCorso.has(member.id)) return; // è il bot che lo sta riportando
-  if (isStaff(member)) return; // lo staff non sente l'audio
-  if (!fs.existsSync(AUDIO)) return;
-  // una riproduzione alla volta: gli altri aspettano il loro turno
+  if (isStaff(member)) { console.log(`🔇 ${member.user.username} è entrato in attesa ma è staff: niente audio (usa /test-audio per provarlo)`); return; }
+  if (!fs.existsSync(AUDIO)) { console.warn('[audio] File audio mancante: audio/attesa-assistenza.ogg'); return; }
+  console.log(`🔊 ${member.user.username} è entrato in attesa: gli faccio sentire l'audio`);
+  metti(member);
+}
+
+// una riproduzione alla volta: gli altri aspettano il loro turno
+function metti(member) {
   const gid = member.guild.id;
   const prima = coda.get(gid) ?? Promise.resolve();
   const dopo = prima.then(() => riproduci(member)).catch(() => {});
@@ -114,7 +119,20 @@ async function onReady(guild) {
   save();
 }
 
+// /test-audio: per provare l'audio anche se sei staff (devi essere nel canale d'attesa)
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
+const command = new SlashCommandBuilder().setName('test-audio').setDescription('Prova l\'audio della sala d\'attesa (entra prima nel vocale d\'attesa)')
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild).setDMPermission(false).toJSON();
+async function handle(i) {
+  if (i.member.voice.channelId !== CANALE_ATTESA) {
+    return i.reply({ content: `🔇 Prima entra nel canale vocale <#${CANALE_ATTESA}>, poi usa di nuovo \`/test-audio\`.`, flags: MessageFlags.Ephemeral });
+  }
+  await i.reply({ content: '🔊 Ti sposto un attimo nel canale privato e ti faccio sentire l\'audio...', flags: MessageFlags.Ephemeral });
+  metti(i.member);
+}
+
 module.exports = {
   init(cfgFn, saveFn) { cfg = cfgFn; save = saveFn; },
-  onVoiceUpdate, onReady, libVoce,
+  onVoiceUpdate, onReady, libVoce, command, handle,
+  isVoce: (i) => i.isChatInputCommand() && i.commandName === 'test-audio',
 };
