@@ -14,7 +14,8 @@ const VERSIONE = path.join(__dirname, '.versione');
 const HEADERS = { 'User-Agent': 'vice-life-bot-updater', Accept: 'application/vnd.github+json' };
 
 const permesso = (p) => !p.startsWith('.') && !p.includes('/.') && p !== 'data.json'
-  && !p.startsWith('sfondi/') && !p.startsWith('node_modules/') && !p.endsWith('.bat') && !p.includes('..');
+  && !p.startsWith('sfondi/') && !p.startsWith('node_modules/') && !p.endsWith('.bat') && !p.includes('..')
+  && !p.startsWith('sito/dati/') && !p.startsWith('sito/caricati/'); // le modifiche del sito fatte dal pannello staff
 
 async function controlla({ silenzioso = false } = {}) {
   try {

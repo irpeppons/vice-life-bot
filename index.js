@@ -13,6 +13,7 @@
 //   /esito-wl       -> WL passata / non superata (solo esaminatori)
 //   /storie-pg      -> storie dei personaggi (accettate dagli esaminatori)
 //   Audio sala d'attesa -> chi entra nel vocale d'attesa sente un messaggio (solo lui)
+//   Sito web           -> http://localhost:3000 (lato staff con password: /admin)
 // ================================================
 require('dotenv').config();
 const fs = require('fs');
@@ -641,5 +642,7 @@ if (!process.env.DISCORD_TOKEN) {
   process.exit(1);
 }
 loadCanvas(); // prepara la libreria per le immagini (la installa da sola se manca)
+// Sito web con lato staff (http://localhost:3000 e /admin)
+try { require('./sito/server').avvia(); } catch (e) { console.warn(`[sito] ${e.message}`); }
 // Prima controlla gli aggiornamenti su GitHub, poi accende il bot
 require('./updater').avvia().then((ok) => { if (ok) client.login(process.env.DISCORD_TOKEN); });

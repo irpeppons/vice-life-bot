@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pannello staff – VICE LIFE RP</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root { --rosa: #ff2d95; --sfondo: #0b0612; --carta: #160b24; --bordo: #3a2250; --testo: #fff; --testo-2: #cdb9e0; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--sfondo); color: var(--testo); font-family: Montserrat, Arial, sans-serif; }
+    button, input, textarea, select { font: inherit; }
+    .nascosto { display: none !important; }
+    /* login */
+    #login { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
+    .box { background: var(--carta); border: 1.5px solid var(--rosa); border-radius: 18px; padding: 32px; width: 100%; max-width: 380px; text-align: center; box-shadow: 0 0 30px rgba(255,45,149,.25); }
+    .box img { width: 90px; border-radius: 16px; margin-bottom: 12px; }
+    /* barra */
+    header { position: sticky; top: 0; z-index: 5; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 12px 20px; background: rgba(8,4,14,.96); border-bottom: 1px solid var(--bordo); }
+    header h1 { font-size: 18px; margin: 0 auto 0 0; }
+    header h1 b { color: var(--rosa); }
+    .stato { font-size: 13px; color: var(--testo-2); }
+    .stato.modificato { color: #ffcc4d; }
+    .btn { border: 0; border-radius: 10px; padding: 10px 16px; font-weight: 800; cursor: pointer; color: #fff; background: #2a1840; text-decoration: none; display: inline-block; }
+    .btn.rosa { background: linear-gradient(90deg, var(--rosa), #e01ad8); }
+    .btn.rosso { background: #a11d3a; }
+    .btn.piccolo { padding: 6px 10px; font-size: 13px; }
+    /* schede */
+    .schede { display: flex; gap: 6px; flex-wrap: wrap; padding: 14px 20px 0; max-width: 1100px; margin: 0 auto; }
+    .schede button { background: transparent; border: 1.5px solid var(--bordo); color: var(--testo-2); border-radius: 10px; padding: 8px 14px; font-weight: 800; cursor: pointer; }
+    .schede button.attiva { border-color: var(--rosa); color: #fff; box-shadow: 0 0 12px rgba(255,45,149,.4); }
+    main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+    .gruppo { background: var(--carta); border: 1px solid var(--bordo); border-radius: 14px; padding: 18px; margin-bottom: 18px; }
+    .gruppo h2 { margin: 0 0 12px; font-size: 17px; }
+    .gruppo h2 .rosa { color: var(--rosa); }
+    .aiuto { color: var(--testo-2); font-size: 13px; margin: -6px 0 12px; }
+    label.campo { display: block; margin-bottom: 12px; font-size: 13px; color: var(--testo-2); font-weight: 600; }
+    label.campo input, label.campo textarea, label.campo select { display: block; width: 100%; margin-top: 4px; padding: 9px 11px; border-radius: 9px; border: 1px solid var(--bordo); background: #0f0719; color: #fff; }
+    label.campo textarea { min-height: 70px; resize: vertical; }
+    label.campo input[type=color] { height: 42px; padding: 3px; }
+    .riga { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0 14px; }
+    .elemento { border: 1px dashed var(--bordo); border-radius: 12px; padding: 12px; margin-bottom: 10px; background: #12091e; }
+    .elemento .azioni { display: flex; gap: 6px; justify-content: flex-end; margin-bottom: 6px; }
+    .anteprima { max-width: 220px; max-height: 120px; border-radius: 10px; display: block; margin: 6px 0; border: 1px solid var(--bordo); }
+    .msg { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: #1d0f2e; border: 1.5px solid var(--rosa); padding: 12px 20px; border-radius: 12px; z-index: 20; }
+    .errore { color: #ff7a9a; min-height: 20px; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <!-- LOGIN -->
+  <div id="login">
+    <form class="box" id="formLogin">
+      <img src="img/logo.jpg" alt="">
+      <h2>🔒 Lato staff</h2>
+      <p style="color:var(--testo-2)">Inserisci la password per modificare il sito.</p>
+      <label class="campo"><input type="password" id="pw" placeholder="Password" autocomplete="current-password" required></label>
+      <button class="btn rosa" style="width:100%">Entra</button>
+      <div class="errore" id="erroreLogin"></div>
+    </form>
+  </div>
+
+  <!-- EDITOR -->
+  <div id="editor" class="nascosto">
+    <header>
+      <h1>🌴 Pannello staff – <b>VICE LIFE RP</b></h1>
+      <span class="stato" id="stato">Tutto salvato</span>
+      <a class="btn" href="/" target="_blank">👁️ Vedi il sito</a>
+      <button class="btn rosa" id="salva">💾 Salva</button>
+      <button class="btn" id="esci">🚪 Esci</button>
+    </header>
+    <div class="schede" id="schede"></div>
+    <main id="contenuto"></main>
+  </div>
+
+<script>
+let c = null; let modificato = false; let scheda = 'generale';
+const $ = (s) => document.querySelector(s);
+const api = async (url, corpo) => {
+  const r = await fetch(url, corpo === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.errore || 'Errore');
+  return j;
+};
+const avviso = (t) => { const d = document.createElement('div'); d.className = 'msg'; d.textContent = t; document.body.append(d); setTimeout(() => d.remove(), 2600); };
+const segna = () => { modificato = true; $('#stato').textContent = '● Modifiche non salvate'; $('#stato').classList.add('modificato'); };
+addEventListener('beforeunload', (e) => { if (modificato) { e.preventDefault(); e.returnValue = ''; } });
+
+// ---------- campi ----------
+function el(tag, attr = {}, ...figli) { const e = document.createElement(tag); Object.assign(e, attr); figli.flat().forEach((f) => e.append(f)); return e; }
+function campo(obj, chiave, etichetta, tipo = 'text', opzioni) {
+  let input;
+  if (tipo === 'textarea') input = el('textarea', { value: obj[chiave] ?? '' });
+  else if (tipo === 'select') { input = el('select'); opzioni.forEach(([v, t]) => input.append(el('option', { value: v, textContent: t, selected: String(obj[chiave]) === String(v) }))); }
+  else input = el('input', { type: tipo, value: obj[chiave] ?? '' });
+  input.addEventListener('input', () => { obj[chiave] = tipo === 'select' && /^\d+$/.test(input.value) ? Number(input.value) : input.value; segna(); });
+  return el('label', { className: 'campo' }, etichetta, input);
+}
+function immagine(obj, chiave, etichetta) {
+  const prev = el('img', { className: 'anteprima', src: obj[chiave] ? '/' + obj[chiave] : '' });
+  if (!obj[chiave]) prev.classList.add('nascosto');
+  const file = el('input', { type: 'file', accept: 'image/*' });
+  file.addEventListener('change', async () => {
+    const f = file.files[0]; if (!f) return;
+    if (f.size > 8 * 1024 * 1024) return avviso('❌ Immagine troppo grande (max 8 MB)');
+    const dati = await new Promise((ok) => { const r = new FileReader(); r.onload = () => ok(r.result); r.readAsDataURL(f); });
+    try { const j = await api('/api/carica', { nome: f.name, dati }); obj[chiave] = j.percorso; prev.src = '/' + j.percorso; prev.classList.remove('nascosto'); segna(); avviso('✅ Immagine caricata: ricordati di salvare'); } catch (e) { avviso('❌ ' + e.message); }
+  });
+  const togli = el('button', { className: 'btn piccolo', type: 'button', textContent: '✖ Togli immagine' });
+  togli.onclick = () => { obj[chiave] = ''; prev.classList.add('nascosto'); segna(); };
+  return el('label', { className: 'campo' }, etichetta, prev, file, togli);
+}
+// lista di elementi con aggiungi / sposta / elimina
+function lista(arr, campi, nuovo, titolo = 'Elemento') {
+  const box = el('div');
+  const disegna = () => {
+    box.innerHTML = '';
+    arr.forEach((x, n) => {
+      const az = el('div', { className: 'azioni' },
+        el('span', { textContent: `${titolo} ${n + 1}`, style: 'margin-right:auto;font-weight:800' }),
+        bottone('⬆️', () => { if (n) { [arr[n - 1], arr[n]] = [arr[n], arr[n - 1]]; segna(); disegna(); } }),
+        bottone('⬇️', () => { if (n < arr.length - 1) { [arr[n + 1], arr[n]] = [arr[n], arr[n + 1]]; segna(); disegna(); } }),
+        bottone('🗑️', () => { if (confirm('Eliminare?')) { arr.splice(n, 1); segna(); disegna(); } }, 'rosso'));
+      box.append(el('div', { className: 'elemento' }, az, el('div', { className: 'riga' }, campi(x))));
+    });
+    box.append(bottone('➕ Aggiungi', () => { arr.push(nuovo()); segna(); disegna(); }, 'rosa'));
+  };
+  disegna();
+  return box;
+}
+const bottone = (t, f, cl = '') => { const b = el('button', { className: 'btn piccolo ' + cl, type: 'button', textContent: t }); b.onclick = f; return b; };
+const gruppo = (titolo, aiuto, ...figli) => el('div', { className: 'gruppo' }, el('h2', { innerHTML: titolo }), aiuto ? el('p', { className: 'aiuto', textContent: aiuto }) : '', ...figli);
+const elementoCampi = (x, conFoto) => [campo(x, 'icona', 'Icona / emoji / numero'), campo(x, 'titolo', 'Titolo'), campo(x, 'testo', 'Testo', 'textarea'), ...(conFoto ? [immagine(x, 'immagine', 'Foto (facoltativa, al posto dell\'icona)')] : [])];
+
+// ---------- schede ----------
+const SCHEDE = {
+  generale: ['⚙️ Generale', () => {
+    const g = c.generale; g.colori ??= {};
+    return [
+      gruppo('🏷️ Nome e link', 'Nei link dei pulsanti puoi scrivere {discord} o {server}: verranno sostituiti con questi.',
+        el('div', { className: 'riga' }, campo(g, 'nome', 'Nome (bianco)'), campo(g, 'nomeEvidenziato', 'Nome (rosa)'), campo(g, 'titoloScheda', 'Titolo della scheda del browser')),
+        campo(g, 'descrizione', 'Descrizione per Google', 'textarea'),
+        el('div', { className: 'riga' }, campo(g, 'linkDiscord', 'Link Discord (https://discord.gg/...)'), campo(g, 'linkServer', 'Link per entrare nel server di gioco'), campo(g, 'testoAccedi', 'Testo pulsante Accedi (vuoto = nascosto)'))),
+      gruppo('🖼️ Immagini', 'Il banner va in alto nella home: meglio un\'immagine larga (es. 2000x700).',
+        el('div', { className: 'riga' }, immagine(g, 'logo', 'Logo'), immagine(g, 'banner', 'Banner della home'))),
+      gruppo('🎨 Colori', '', el('div', { className: 'riga' }, campo(g.colori, 'rosa', 'Colore principale', 'color'), campo(g.colori, 'viola', 'Colore secondario', 'color'), campo(g.colori, 'sfondo', 'Sfondo', 'color'))),
+    ];
+  }],
+  home: ['🏠 Home', () => {
+    const h = c.home; h.bottoni ??= []; h.carte ??= [];
+    return [
+      gruppo('✍️ Scritta grande', '', el('div', { className: 'riga' }, campo(h, 'riga1', 'Prima riga'), campo(h, 'riga2', 'Seconda riga (bianco)'), campo(h, 'evidenziato', 'Seconda riga (rosa)'))),
+      gruppo('🔘 Pulsanti', '', lista(h.bottoni, (b) => [campo(b, 'testo', 'Testo'), campo(b, 'link', 'Link ({discord}, {server}, #regole, https://...)'), campo(b, 'stile', 'Stile', 'select', [['pieno', 'Rosa pieno'], ['vuoto', 'Bordo bianco']])], () => ({ testo: 'Nuovo pulsante', link: '#', stile: 'pieno' }), 'Pulsante')),
+      gruppo('🃏 Schede sotto il banner', '', lista(h.carte, (x) => elementoCampi(x, true), () => ({ icona: '⭐', titolo: 'Titolo', testo: 'Testo' }), 'Scheda')),
+    ];
+  }],
+  sezioni: ['📚 Sezioni', () => [
+    gruppo('📚 Sezioni della pagina', 'Ogni sezione compare nella pagina e nel menu in alto. Puoi aggiungerne, spostarle, nasconderle o eliminarle.',
+      lista(c.sezioni, (s) => {
+        s.elementi ??= []; s.bottone ??= { testo: '', link: '' };
+        return [
+          campo(s, 'menu', 'Nome nel menu (vuoto = non in menu)'), campo(s, 'id', 'Codice (senza spazi, es. regole)'),
+          campo(s, 'titolo', 'Titolo (bianco)'), campo(s, 'evidenziato', 'Titolo (rosa)'), campo(s, 'titoloDopo', 'Titolo dopo (bianco)'),
+          campo(s, 'tipo', 'Stile', 'select', [['carte', 'Schede con icona'], ['testi', 'Schede di testo'], ['passi', 'Passi numerati'], ['staff', 'Staff (foto tonde)']]),
+          campo(s, 'colonne', 'Colonne', 'select', [[2, '2'], [3, '3'], [4, '4'], [5, '5']]),
+          campo(s, 'nascosta', 'Visibile?', 'select', [['', 'Sì'], ['1', 'No, nascosta']]),
+          el('div', { style: 'grid-column:1/-1' }, campo(s, 'intro', 'Testo introduttivo', 'textarea'), campo(s, 'sottotitolo', 'Sottotitolo (solo per i passi)'),
+            el('div', { className: 'riga' }, campo(s.bottone, 'testo', 'Pulsante sotto la sezione (vuoto = nessuno)'), campo(s.bottone, 'link', 'Link del pulsante')),
+            el('h3', { textContent: 'Elementi della sezione' }),
+            lista(s.elementi, (x) => elementoCampi(x, true), () => ({ icona: '⭐', titolo: 'Titolo', testo: 'Testo' }))),
+        ];
+      }, () => ({ id: 'nuova' + Date.now().toString(36), menu: '⭐ Nuova', titolo: '⭐ NUOVA', evidenziato: 'SEZIONE', intro: '', tipo: 'carte', colonne: 4, elementi: [] }), 'Sezione')),
+  ]],
+  fondo: ['💬 Fondo pagina', () => {
+    const ch = c.chiusura; ch.bottone ??= {}; c.footer ??= {};
+    return [
+      gruppo('💬 Invito finale', '', el('div', { className: 'riga' }, campo(ch, 'titolo', 'Titolo (bianco)'), campo(ch, 'evidenziato', 'Titolo (rosa)')), campo(ch, 'testo', 'Testo', 'textarea'),
+        el('div', { className: 'riga' }, campo(ch.bottone, 'testo', 'Testo pulsante'), campo(ch.bottone, 'link', 'Link pulsante'))),
+      gruppo('📄 Footer', '', campo(c.footer, 'testo', 'Testo'), campo(c.footer, 'copyright', 'Copyright')),
+    ];
+  }],
+  sicurezza: ['🔑 Password', () => {
+    const p = { vecchia: '', nuova: '', conferma: '' };
+    const salva = bottone('🔑 Cambia password', async () => {
+      if (p.nuova !== p.conferma) return avviso('❌ Le due nuove password non sono uguali');
+      try { await api('/api/password', { vecchia: p.vecchia, nuova: p.nuova }); avviso('✅ Password cambiata'); } catch (e) { avviso('❌ ' + e.message); }
+    }, 'rosa');
+    const ripristina = bottone('♻️ Rimetti tutto il sito com\'era all\'inizio', async () => {
+      if (!confirm('Sicuro? Perderai tutte le modifiche fatte al sito.')) return;
+      await api('/api/ripristina', {}); modificato = false; await carica(); avviso('♻️ Sito ripristinato');
+    }, 'rosso');
+    const pw = (k, t) => { const l = campo(p, k, t, 'password'); return l; };
+    return [
+      gruppo('🔑 Cambia password', 'Almeno 8 caratteri. Non dirla a nessuno fuori dallo staff.', el('div', { className: 'riga' }, pw('vecchia', 'Password attuale'), pw('nuova', 'Nuova password'), pw('conferma', 'Ripeti la nuova password')), salva),
+      gruppo('♻️ Ripristino', 'Ogni volta che salvi viene tenuta anche una copia della versione precedente (sito/dati/contenuti-precedenti.json).', ripristina),
+    ];
+  }],
+};
+
+function mostra() {
+  const s = $('#schede'); s.innerHTML = '';
+  Object.entries(SCHEDE).forEach(([k, [t]]) => { const b = el('button', { textContent: t, className: k === scheda ? 'attiva' : '' }); b.onclick = () => { scheda = k; mostra(); }; s.append(b); });
+  const m = $('#contenuto'); m.innerHTML = ''; SCHEDE[scheda][1]().forEach((x) => m.append(x));
+}
+async function carica() { c = await api('/api/contenuti'); $('#login').classList.add('nascosto'); $('#editor').classList.remove('nascosto'); mostra(); $('#stato').textContent = 'Tutto salvato'; $('#stato').classList.remove('modificato'); }
+
+$('#formLogin').onsubmit = async (e) => {
+  e.preventDefault(); $('#erroreLogin').textContent = '';
+  try { await api('/api/login', { password: $('#pw').value }); await carica(); } catch (err) { $('#erroreLogin').textContent = '❌ ' + err.message; }
+};
+$('#salva').onclick = async () => {
+  try { await api('/api/salva', c); modificato = false; $('#stato').textContent = '✅ Salvato'; $('#stato').classList.remove('modificato'); avviso('✅ Sito salvato! Apri "Vedi il sito" per controllare.'); } catch (e) { avviso('❌ ' + e.message); }
+};
+$('#esci').onclick = async () => { if (modificato && !confirm('Hai modifiche non salvate. Uscire lo stesso?')) return; await api('/api/logout', {}); modificato = false; location.reload(); };
+api('/api/sessione').then((j) => { if (j.dentro) carica(); });
+</script>
+</body>
+</html>

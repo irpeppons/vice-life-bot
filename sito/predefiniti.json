@@ -1,0 +1,100 @@
+{
+  "generale": {
+    "nome": "VICE LIFE",
+    "nomeEvidenziato": "RP",
+    "titoloScheda": "VICE LIFE RP 🌴",
+    "descrizione": "VICE LIFE RP – La tua città, la tua storia, la tua nuova vita. Server Roleplay.",
+    "logo": "img/logo.jpg",
+    "banner": "img/hero.jpg",
+    "linkDiscord": "https://discord.gg/",
+    "linkServer": "#",
+    "testoAccedi": "👤 Accedi",
+    "colori": { "rosa": "#ff2d95", "viola": "#7b2ff7", "sfondo": "#0b0612" }
+  },
+  "home": {
+    "riga1": "LA TUA CITTÀ, LA TUA STORIA,",
+    "riga2": "LA TUA",
+    "evidenziato": "NUOVA VITA",
+    "bottoni": [
+      { "testo": "🎮 UNISCITI AL SERVER", "link": "{server}", "stile": "pieno" },
+      { "testo": "💬 ENTRA SU DISCORD", "link": "{discord}", "stile": "vuoto" }
+    ],
+    "carte": [
+      { "icona": "👥", "titolo": "Roleplay realistico", "testo": "Un'esperienza immersiva e credibile" },
+      { "icona": "🏙️", "titolo": "Città dinamica", "testo": "Eventi, attività e una città sempre viva" },
+      { "icona": "💼", "titolo": "Lavori e fazioni", "testo": "Numerose opportunità di carriera e fazioni ufficiali" },
+      { "icona": "⚙️", "titolo": "Sistemi custom", "testo": "Meccaniche esclusive e sempre in aggiornamento" },
+      { "icona": "🤝", "titolo": "Community attiva", "testo": "Uno staff presente e una community unita" }
+    ]
+  },
+  "sezioni": [
+    {
+      "id": "server", "menu": "🖥️ Il server", "titolo": "🖥️ IL", "evidenziato": "SERVER",
+      "intro": "VICE LIFE RP è un server Roleplay ambientato in una città piena di luci, palme e opportunità. Qui decidi tu chi essere: poliziotto, medico, imprenditore o criminale. Ogni scelta ha delle conseguenze.",
+      "tipo": "passi", "colonne": 5, "sottotitolo": "Come entrare in città",
+      "elementi": [
+        { "icona": "1", "titolo": "Entra su Discord", "testo": "Unisciti al nostro server Discord e leggi il regolamento." },
+        { "icona": "2", "titolo": "Richiedi la whitelist", "testo": "Premi 📝 Richiedi Whitelist e compila il modulo." },
+        { "icona": "3", "titolo": "WL conoscitiva", "testo": "Un breve colloquio vocale con lo staff sulle basi del RP." },
+        { "icona": "4", "titolo": "Storia del personaggio", "testo": "Scrivi la storia del tuo personaggio e falla approvare." },
+        { "icona": "5", "titolo": "Benvenuto in città! 🌴", "testo": "Ricevi il ruolo cittadino e inizia la tua nuova vita." }
+      ]
+    },
+    {
+      "id": "regole", "menu": "📜 Regole", "titolo": "📜", "evidenziato": "REGOLE", "titoloDopo": "PRINCIPALI",
+      "intro": "Queste sono le basi: il regolamento completo lo trovi sul nostro Discord.",
+      "tipo": "testi", "colonne": 3,
+      "elementi": [
+        { "icona": "🎭", "titolo": "IC / OOC", "testo": "Tieni sempre separato quello che succede in gioco (IC) da quello fuori dal gioco (OOC)." },
+        { "icona": "🧠", "titolo": "No Metagaming", "testo": "Non usare in gioco informazioni prese fuori dal gioco: Discord, live o amici." },
+        { "icona": "💪", "titolo": "No Powergaming", "testo": "Niente azioni impossibili e lascia sempre all'altro la possibilità di reagire." },
+        { "icona": "🔫", "titolo": "No RDM / VDM", "testo": "Non uccidere e non investire nessuno senza un vero motivo RP." },
+        { "icona": "😨", "titolo": "Fear RP", "testo": "Il tuo personaggio tiene alla sua vita: se è minacciato, ha paura." },
+        { "icona": "☠️", "titolo": "NLR", "testo": "Dopo la morte dimentichi gli eventi che l'hanno causata." }
+      ],
+      "bottone": { "testo": "📜 Leggi il regolamento completo", "link": "{discord}" }
+    },
+    {
+      "id": "fazioni", "menu": "🚔 Fazioni", "titolo": "🚔", "evidenziato": "FAZIONI",
+      "intro": "Entra a far parte di una fazione e scrivi la storia della città insieme agli altri.",
+      "tipo": "carte", "colonne": 4,
+      "elementi": [
+        { "icona": "🚓", "titolo": "Polizia", "testo": "Proteggi i cittadini e mantieni l'ordine in città." },
+        { "icona": "🚑", "titolo": "Ospedale", "testo": "Soccorri e cura chi ha bisogno, giorno e notte." },
+        { "icona": "🔧", "titolo": "Meccanici", "testo": "Ripara, modifica e personalizza i veicoli della città." },
+        { "icona": "🕶️", "titolo": "Organizzazioni", "testo": "Gang e famiglie che controllano le strade di notte." }
+      ]
+    },
+    {
+      "id": "lavori", "menu": "💼 Lavori", "titolo": "💼", "evidenziato": "LAVORI",
+      "intro": "Tanti modi per guadagnare e costruire la tua carriera.",
+      "tipo": "carte", "colonne": 4,
+      "elementi": [
+        { "icona": "🚕", "titolo": "Tassista", "testo": "Porta i cittadini in giro per la città." },
+        { "icona": "🚚", "titolo": "Camionista", "testo": "Consegne e trasporti in tutto lo stato." },
+        { "icona": "🍔", "titolo": "Ristorazione", "testo": "Apri il tuo locale o lavora in quelli della città." },
+        { "icona": "🏢", "titolo": "Imprenditore", "testo": "Avvia la tua attività e diventa qualcuno." }
+      ]
+    },
+    {
+      "id": "staff", "menu": "👮 Staff", "titolo": "👮 LO", "evidenziato": "STAFF",
+      "intro": "Uno staff presente, sempre pronto ad aiutarti. Per assistenza apri un ticket su Discord.",
+      "tipo": "staff", "colonne": 4,
+      "elementi": [
+        { "icona": "👑", "titolo": "Founder", "testo": "Nome staffer" },
+        { "icona": "🔱", "titolo": "Co-Founder", "testo": "Nome staffer" },
+        { "icona": "⚜️", "titolo": "Head Admin", "testo": "Nome staffer" },
+        { "icona": "🛡️", "titolo": "Admin", "testo": "Nome staffer" }
+      ]
+    }
+  ],
+  "chiusura": {
+    "titolo": "💬 ENTRA NELLA", "evidenziato": "COMMUNITY",
+    "testo": "Su Discord trovi annunci, eventi, whitelist, ticket di assistenza e tutta la community di VICE LIFE RP.",
+    "bottone": { "testo": "💬 ENTRA SU DISCORD", "link": "{discord}" }
+  },
+  "footer": {
+    "testo": "VICE LIFE RP 🌴 – La tua città, la tua storia, la tua nuova vita.",
+    "copyright": "© 2026 VICE LIFE RP. Tutti i diritti riservati."
+  }
+}
