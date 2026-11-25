@@ -15,6 +15,7 @@
 //   Audio sala d'attesa -> chi entra nel vocale d'attesa sente un messaggio (solo lui)
 //   Sito web           -> http://localhost:3000 (lato staff con password: /admin)
 //   /partner        -> pubblica un server partner (solo ruolo partner manager)
+//   /lavori-info    -> info sui lavori (pubblicate da sole nel canale lavori)
 // ================================================
 require('dotenv').config();
 const fs = require('fs');
@@ -59,6 +60,8 @@ storie.init(cfg, save);
 const voce = require('./voce');
 voce.init(cfg, save);
 const partner = require('./partner');
+const { lavori } = require('./info');
+lavori.init(cfg, save);
 
 // ---------- statistiche ----------
 const STATS = [
@@ -456,7 +459,7 @@ const commands = [
     .setDescription('Scegli i ruoli che ricevono in automatico i nuovi membri')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
     .setDMPermission(false),
-].map((c) => c.toJSON()).concat(tickets.command, idfissi.commands, community.commands, statoServer.command, wl.command, richiestaWl.command, esitoWl.command, storie.command, voce.command, partner.command);
+].map((c) => c.toJSON()).concat(tickets.command, idfissi.commands, community.commands, statoServer.command, wl.command, richiestaWl.command, esitoWl.command, storie.command, voce.command, partner.command, lavori.command);
 
 // ---------- client ----------
 const client = new Client({
@@ -494,6 +497,7 @@ client.once('clientReady', async () => {
     await esitoWl.onReady(g).catch(() => {});
     await storie.onReady(g).catch(() => {});
     await voce.onReady(g).catch(() => {});
+    await lavori.onReady(g)?.catch?.(() => {});
     if (cfg(g.id).stats) await updateStats(g);
   }
   setInterval(() => client.guilds.cache.forEach((g) => cfg(g.id).stats && scheduleStats(g)), UPDATE_EVERY_MS);
@@ -528,6 +532,8 @@ client.on('interactionCreate', async (i) => {
   try {
     // Sistema ticket
     if (tickets.isTicket(i)) return await tickets.handle(i);
+    // Info lavori
+    if (lavori.is(i)) return await lavori.handle(i);
     // Partnership
     if (partner.isPartner(i)) return await partner.handle(i);
     // Prova audio sala d'attesa
