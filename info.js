@@ -174,4 +174,37 @@ const lavori = creaInfo({
   ],
 });
 
-module.exports = { creaInfo, lavori };
+// ---------- INFO OFFERTE DI LAVORO ----------
+const offerte = creaInfo({
+  chiave: 'infoOfferte',
+  prefisso: 'of',
+  comando: 'offerte-info',
+  descrizioneComando: 'Modifica il messaggio informativo del canale offerte di lavoro',
+  nome: '📢 Info Offerte di Lavoro – VICE LIFE🌴',
+  canale: '1575153879665086514',
+  footer: 'VICE LIFE RP 🌴 • Offerte di lavoro',
+  sezioni: [
+    {
+      titolo: '📢 OFFERTE DI LAVORO – VICE LIFE RP',
+      testo: 'In questo canale trovi le **offerte di lavoro** della città: fazioni, aziende e attività che cercano **nuovo personale**.\n\nTieni d\'occhio il canale: le offerte possono uscire in qualsiasi momento! 👀',
+    },
+    {
+      titolo: '📝 Com\'è fatta un\'offerta',
+      testo: 'Ogni offerta contiene:\n🏢 **Chi cerca** – fazione, azienda o attività\n💼 **Ruolo** – il lavoro offerto\n📋 **Requisiti** – cosa serve per candidarsi\n💰 **Stipendio / guadagni** – se indicati\n📞 **Come candidarsi** – ticket, colloquio o contatto in gioco\n⏰ **Scadenza** – fino a quando si accettano candidature',
+    },
+    {
+      titolo: '✅ Come candidarti',
+      testo: '1️⃣ Leggi bene **requisiti** e **scadenza** dell\'offerta\n2️⃣ Segui le istruzioni scritte nell\'offerta (di solito un **ticket** o un **colloquio in gioco**)\n3️⃣ Presentati **in RP**: il colloquio lo fa il tuo personaggio!\n4️⃣ Aspetta la risposta di chi ha pubblicato l\'offerta\n\n🍀 Più sei serio e preciso, più possibilità hai di essere scelto.',
+    },
+    {
+      titolo: '🏢 Vuoi pubblicare un\'offerta?',
+      testo: 'Se gestisci una **fazione**, un\'**azienda** o un\'**attività** e cerchi personale, apri un **ticket** e lo staff pubblicherà la tua offerta in questo canale.\n\nScrivi nel ticket: chi sei, che ruolo cerchi, requisiti, stipendio, come candidarsi e scadenza.',
+    },
+    {
+      titolo: '📜 Regole del canale',
+      testo: '• Le offerte le pubblica **solo lo staff**\n• Non scrivere in questo canale: per domande apri un **ticket**\n• Niente offerte **false** o per **scherzo**\n• Le offerte di **attività illegali** non vanno pubblicate qui: si gestiscono **in gioco**',
+    },
+  ],
+});
+
+module.exports = { creaInfo, lavori, offerte };
