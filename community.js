@@ -433,6 +433,7 @@ async function bottoneGiveaway(i) {
 //   /spoiler  (immagini censurate: si preme sopra per vederle)
 // ================================================
 const EMOJI_SPOILER = '1575192806618570885';
+const RUOLO_SPOILER = '1575145370600611870'; // taggato sempre negli spoiler e nell'annuncio dell'obiettivo
 const modalSpoiler = (obiettivo = 10) => new ModalBuilder().setCustomId('spm').setTitle('🙈 Spoiler').addComponents(
   input('obiettivo', 'Obiettivo reazioni (es. 10)', { value: String(obiettivo), max: 5, required: true }),
   input('titolo', 'Titolo', { max: 200, placeholder: '🙈 SPOILER: nuova macchina in arrivo' }),
@@ -448,7 +449,8 @@ async function inviaSpoiler(i) {
   const obiettivo = parseInt(v('obiettivo'), 10);
   if (!(obiettivo >= 1)) return i.editReply('❌ L\'obiettivo deve essere un numero, per esempio `10`.');
   opz.obiettivo = obiettivo;
-  const ping = [opz.menzione, opz.ruolo ? `<@&${opz.ruolo}>` : ''].filter(Boolean).join(' ');
+  const ruoli = [...new Set([RUOLO_SPOILER, opz.ruolo].filter(Boolean))];
+  const ping = [opz.menzione, ...ruoli.map((r) => `<@&${r}>`)].filter(Boolean).join(' ');
   // Emoji fissa + obiettivo interazioni, sempre in fondo allo spoiler
   const emoji = i.guild.emojis.cache.get(EMOJI_SPOILER) ?? await i.guild.emojis.fetch(EMOJI_SPOILER).catch(() => null);
   const fondo = `${emoji ? `${emoji}\n` : ''}**Arriviamo a ${opz.obiettivo} reazioni per il prossimo spoiler!**`;
@@ -459,7 +461,7 @@ async function inviaSpoiler(i) {
   try {
     const msg = await ch.send({
       content: testo || undefined, files,
-      allowedMentions: { parse: opz.menzione ? ['everyone'] : [], roles: opz.ruolo ? [opz.ruolo] : [] },
+      allowedMentions: { parse: opz.menzione ? ['everyone'] : [], roles: ruoli },
     });
     // Salva lo spoiler per controllare quando arriva all'obiettivo di interazioni
     (cfg(i.guild.id).spoiler ??= {})[msg.id] = { canale: ch.id, obiettivo: opz.obiettivo, raggiunto: false, titolo: v('titolo') };
@@ -493,7 +495,7 @@ async function onReaction(reaction, user) {
       .setDescription(`Siamo arrivati all'obiettivo di **${sp.obiettivo} reazioni** sullo spoiler! 🔥\n\n🙈 **Fra poco uscirà un altro spoiler...**\nRestate sintonizzati! 🌴`)
       .setFooter({ text: 'VICE LIFE RP 🌴' }).setTimestamp();
     const files = immagine(e, 'vicelife');
-    await msg.reply({ embeds: [e], files, allowedMentions: { repliedUser: false } });
+    await msg.reply({ content: `<@&${RUOLO_SPOILER}>`, embeds: [e], files, allowedMentions: { roles: [RUOLO_SPOILER], repliedUser: false } });
     console.log(`🙈 Spoiler ${msg.id}: obiettivo di ${sp.obiettivo} interazioni raggiunto`);
   } catch (e) { console.warn(`[spoiler] ${e.message}`); }
 }
