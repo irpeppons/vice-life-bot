@@ -493,8 +493,10 @@ client.on('guildCreate', (g) => nascondiMessaggioIngresso(g));
 client.on('messageReactionAdd', (reaction, user) => community.onReaction(reaction, user));
 client.on('guildMemberAdd', async (member) => {
   console.log(`👋 Nuovo membro: ${member.user.username}`);
+  // Chi rientra riprende i SUOI ruoli; i ruoli d'ingresso li riceve solo chi entra per la prima volta
+  const rientra = memoria.conosciuto(member);
   const vecchioNick = await memoria.ripristina(member);
-  await giveAutoruoli(member);
+  if (!rientra) await giveAutoruoli(member);
   await idfissi.onJoin(member, vecchioNick);
   memoria.salva(member);
   await sendWelcome(member).catch((e) => console.warn(`[benvenuto] ${member.guild.name}: ${e.message}`));

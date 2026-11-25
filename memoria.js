@@ -54,5 +54,7 @@ async function ripristina(member) {
 module.exports = {
   init(cfgFn, saveFn) { cfg = cfgFn; save = saveFn; },
   salva, salvaTutti, ripristina, attiva,
+  // true se il player era già stato nel server (ha ruoli salvati)
+  conosciuto: (member) => attiva(member.guild.id) && Boolean(store(member.guild.id)[member.id]),
   toggle(gid) { cfg(gid).memoriaAttiva = !attiva(gid); save(); return attiva(gid); },
 };
