@@ -12,32 +12,34 @@ const {
 } = require('discord.js');
 
 const EPH = MessageFlags.Ephemeral;
-const CANALE = '1575154048309526598';
-const MINIMO = 5; // membri minimi (compreso chi fa la richiesta)
 const ROSA = '#ff2d95';
 const BANNER = 'banner-vicelife.jpg';
+
+// Crea un sistema di richieste (attività, fazioni...) con il suo pannello
+function creaRichieste(o) {
+const { chiave, P, CANALE, MINIMO, comando, cosa, emoji, titolo, spiegazione, campoNome, campoTipo, tipoPlaceholder, descrPlaceholder } = o;
 let cfg; let save;
 
-const get = (gid) => (cfg(gid).attivita ??= { canale: CANALE, pannello: null, richieste: {} });
+const get = (gid) => (cfg(gid)[chiave] ??= { canale: CANALE, pannello: null, richieste: {} });
 const isStaff = (i) => i.memberPermissions?.has(PermissionFlagsBits.ManageGuild)
   || (cfg(i.guild.id).tickets?.staff ?? []).some((r) => i.member.roles.cache.has(r));
 const nuovoId = () => Date.now().toString(36);
 
 function pannello(guild) {
-  const e = new EmbedBuilder().setColor(ROSA).setTitle('🏪 RICHIESTA ATTIVITÀ – VICE LIFE RP 🌴')
+  const e = new EmbedBuilder().setColor(ROSA).setTitle(titolo)
     .setDescription(
-      'Vuoi aprire un\'**attività** in città? (locale, negozio, officina, azienda...)\n\n' +
+      `${spiegazione}\n\n` +
       'Premi il pulsante qui sotto e compila il modulo con:\n' +
-      '• **Nome** dell\'attività\n• **Tipo** di attività\n• **Descrizione** e progetto\n' +
-      `• **Tutti i membri** dell'attività: minimo **${MINIMO} player** (te compreso)\n\n` +
+      `• **${campoNome}**\n• **${campoTipo}**\n• **Descrizione** e progetto\n` +
+      `• **Tutti i membri**: minimo **${MINIMO} player** (te compreso)\n\n` +
       '📌 La richiesta deve essere **approvata dallo staff**: riceverai la risposta in privato.',
     )
     .setImage(`attachment://${BANNER}`)
-    .setFooter({ text: 'VICE LIFE RP 🌴 • Attività', iconURL: guild.iconURL() ?? undefined });
+    .setFooter({ text: `VICE LIFE RP 🌴 • Richieste ${cosa}`, iconURL: guild.iconURL() ?? undefined });
   return {
     embeds: [e], files: [new AttachmentBuilder(path.join(__dirname, BANNER), { name: BANNER })], attachments: [],
     components: [new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('att:richiedi').setLabel('Richiedi un\'attività').setEmoji('🏪').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId(`${P}:richiedi`).setLabel(o.pulsante).setEmoji(emoji).setStyle(ButtonStyle.Success),
     )],
   };
 }
@@ -61,17 +63,17 @@ const testo = (id, label, { style = TextInputStyle.Short, max = 100, placeholder
   if (placeholder) t.setPlaceholder(placeholder);
   return new LabelBuilder().setLabel(label).setTextInputComponent(t);
 };
-const modalRichiesta = () => new ModalBuilder().setCustomId('attm:invia').setTitle('🏪 Richiesta attività').addLabelComponents(
-  testo('nome', 'Nome dell\'attività', { max: 80, placeholder: 'Es. Vice Burger' }),
-  testo('tipo', 'Tipo di attività', { max: 80, placeholder: 'Es. Ristorante, officina, negozio, night club...' }),
-  new LabelBuilder().setLabel('Membri dell\'attività').setDescription(`Cerca e seleziona tutti i membri (minimo ${MINIMO} con te)`)
+const modalRichiesta = () => new ModalBuilder().setCustomId(`${P}m:invia`).setTitle(`${emoji} Richiesta ${cosa}`).addLabelComponents(
+  testo('nome', campoNome, { max: 80, placeholder: o.nomePlaceholder }),
+  testo('tipo', campoTipo, { max: 80, placeholder: tipoPlaceholder }),
+  new LabelBuilder().setLabel('Membri').setDescription(`Cerca e seleziona tutti i membri (minimo ${MINIMO} con te)`)
     .setUserSelectMenuComponent(new UserSelectMenuBuilder().setCustomId('membri').setPlaceholder('🔎 Cerca i membri...').setMinValues(MINIMO - 1).setMaxValues(25)),
-  testo('descrizione', 'Descrizione e progetto', { style: TextInputStyle.Paragraph, max: 2500, placeholder: 'Cosa fa l\'attività, dove si trova, orari, ruoli dei membri...' }),
+  testo('descrizione', 'Descrizione e progetto', { style: TextInputStyle.Paragraph, max: 2500, placeholder: descrPlaceholder }),
 );
 
 const bottoni = (id, fine = false) => new ActionRowBuilder().addComponents(
-  new ButtonBuilder().setCustomId(`att:ok:${id}`).setLabel('Approva').setEmoji('✅').setStyle(ButtonStyle.Success).setDisabled(fine),
-  new ButtonBuilder().setCustomId(`att:no:${id}`).setLabel('Rifiuta').setEmoji('❌').setStyle(ButtonStyle.Danger).setDisabled(fine),
+  new ButtonBuilder().setCustomId(`${P}:ok:${id}`).setLabel('Approva').setEmoji('✅').setStyle(ButtonStyle.Success).setDisabled(fine),
+  new ButtonBuilder().setCustomId(`${P}:no:${id}`).setLabel('Rifiuta').setEmoji('❌').setStyle(ButtonStyle.Danger).setDisabled(fine),
 );
 
 async function invia(i) {
@@ -80,14 +82,14 @@ async function invia(i) {
   const scelti = [...(i.fields.getSelectedUsers('membri')?.values() ?? [])].filter((u) => !u.bot).map((u) => u.id);
   const membri = [...new Set([i.user.id, ...scelti])];
   if (membri.length < MINIMO) {
-    return i.reply({ content: `❌ Servono almeno **${MINIMO} player** nell'attività (te compreso). Ne hai indicati **${membri.length}**. I bot non contano.`, flags: EPH });
+    return i.reply({ content: `❌ Servono almeno **${MINIMO} player** (te compreso). Ne hai indicati **${membri.length}**. I bot non contano.`, flags: EPH });
   }
   const aperta = Object.values(d.richieste).find((r) => r.richiedente === i.user.id && r.stato === 'attesa');
-  if (aperta) return i.reply({ content: '⏳ Hai già una richiesta di attività in attesa: aspetta la risposta dello staff.', flags: EPH });
+  if (aperta) return i.reply({ content: `⏳ Hai già una richiesta (${cosa}) in attesa: aspetta la risposta dello staff.`, flags: EPH });
   await i.deferReply({ flags: EPH });
 
   const id = nuovoId();
-  const e = new EmbedBuilder().setColor('#f1c40f').setTitle(`🏪 ${v('nome')}`.slice(0, 256))
+  const e = new EmbedBuilder().setColor('#f1c40f').setTitle(`${emoji} ${v('nome')}`.slice(0, 256))
     .setAuthor({ name: `Richiesta di ${i.user.username}`, iconURL: i.user.displayAvatarURL() })
     .setDescription(v('descrizione').slice(0, 4096))
     .addFields(
@@ -96,9 +98,9 @@ async function invia(i) {
       { name: `👥 Membri (${membri.length})`, value: membri.map((u) => `<@${u}>`).join(' ').slice(0, 1024) },
       { name: '📌 Stato', value: '⏳ In attesa dello staff' },
     )
-    .setFooter({ text: 'VICE LIFE RP 🌴 • Richiesta attività' }).setTimestamp();
+    .setFooter({ text: `VICE LIFE RP 🌴 • Richiesta ${cosa}` }).setTimestamp();
   const ch = await g.channels.fetch(d.canale).catch(() => null) ?? i.channel;
-  // tagga tutti i membri dell'attività
+  // tagga tutti i membri
   const msg = await ch.send({ content: membri.map((u) => `<@${u}>`).join(' '), embeds: [e], components: [bottoni(id)], allowedMentions: { users: membri } });
   d.richieste[id] = { richiedente: i.user.id, membri, nome: v('nome'), stato: 'attesa', canale: ch.id, messaggio: msg.id, data: Date.now() };
   save();
@@ -122,49 +124,75 @@ async function handle(i) {
     if (!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) return i.reply({ content: '❌ Non hai i permessi.', flags: EPH });
     const canale = i.options.getChannel('canale')?.id ?? get(i.guild.id).canale;
     await rimettiPannello(i.guild, canale);
-    return i.reply({ content: `✅ Pannello attività pubblicato in <#${canale}>.`, flags: EPH });
+    return i.reply({ content: `✅ Pannello richieste ${cosa} pubblicato in <#${canale}>.`, flags: EPH });
   }
   const id = i.customId;
-  if (id === 'att:richiedi') return i.showModal(modalRichiesta());
-  if (id === 'attm:invia') return invia(i);
+  if (id === `${P}:richiedi`) return i.showModal(modalRichiesta());
+  if (id === `${P}m:invia`) return invia(i);
 
   const [a, b, rid] = id.split(':');
   const d = get(i.guild.id); const r = d.richieste[rid];
-  if (!isStaff(i)) return i.reply({ content: '❌ Solo lo staff può approvare o rifiutare le attività.', flags: EPH });
+  if (!isStaff(i)) return i.reply({ content: '❌ Solo lo staff può approvare o rifiutare le richieste.', flags: EPH });
   if (!r) return i.reply({ content: '❌ Richiesta non trovata.', flags: EPH });
-  if (a === 'att' && b === 'ok') {
+  if (a === P && b === 'ok') {
     r.stato = 'ok'; r.staff = i.user.id; save();
     await segnaStato(i.message, `✅ Approvata da <@${i.user.id}>`, '#2ecc71');
-    const dm = await avvisa(i.guild, r, `✅ La tua richiesta per l'attività **${r.nome}** su **VICE LIFE RP 🌴** è stata **approvata**! 🎉`);
-    await i.channel.send({ content: `✅ L'attività **${r.nome}** è stata **approvata**! ${r.membri.map((u) => `<@${u}>`).join(' ')}`, allowedMentions: { users: r.membri } }).catch(() => {});
-    return i.reply({ content: `✅ Attività approvata.${dm ? ' 📩 Richiedente avvisato in privato.' : ' ⚠️ DM chiusi.'}`, flags: EPH });
+    const dm = await avvisa(i.guild, r, `✅ La tua richiesta (${cosa}) **${r.nome}** su **VICE LIFE RP 🌴** è stata **approvata**! 🎉`);
+    await i.channel.send({ content: `✅ ${emoji} **${r.nome}** è stata **approvata**! ${r.membri.map((u) => `<@${u}>`).join(' ')}`, allowedMentions: { users: r.membri } }).catch(() => {});
+    return i.reply({ content: `✅ Richiesta approvata.${dm ? ' 📩 Richiedente avvisato in privato.' : ' ⚠️ DM chiusi.'}`, flags: EPH });
   }
-  if (a === 'att' && b === 'no') {
-    return i.showModal(new ModalBuilder().setCustomId(`attm:no:${rid}`).setTitle('❌ Rifiuta attività').addComponents(
+  if (a === P && b === 'no') {
+    return i.showModal(new ModalBuilder().setCustomId(`${P}m:no:${rid}`).setTitle('❌ Rifiuta richiesta').addComponents(
       new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('motivo').setLabel('Motivo').setStyle(TextInputStyle.Paragraph).setMaxLength(1000).setRequired(true)),
     ));
   }
-  if (a === 'attm' && b === 'no') {
+  if (a === `${P}m` && b === 'no') {
     const motivo = i.fields.getTextInputValue('motivo').trim();
     r.stato = 'no'; r.staff = i.user.id; save();
     if (i.message) await segnaStato(i.message, `❌ Rifiutata da <@${i.user.id}>\n📝 ${motivo}`, '#e74c3c');
-    const dm = await avvisa(i.guild, r, `❌ La tua richiesta per l'attività **${r.nome}** su **VICE LIFE RP 🌴** è stata **rifiutata**.\n📝 Motivo: ${motivo}\n\nPuoi correggerla e inviarne una nuova dal pannello.`);
-    return i.reply({ content: `❌ Attività rifiutata.${dm ? ' 📩 Richiedente avvisato in privato.' : ' ⚠️ DM chiusi.'}`, flags: EPH });
+    const dm = await avvisa(i.guild, r, `❌ La tua richiesta (${cosa}) **${r.nome}** su **VICE LIFE RP 🌴** è stata **rifiutata**.\n📝 Motivo: ${motivo}\n\nPuoi correggerla e inviarne una nuova dal pannello.`);
+    return i.reply({ content: `❌ Richiesta rifiutata.${dm ? ' 📩 Richiedente avvisato in privato.' : ' ⚠️ DM chiusi.'}`, flags: EPH });
   }
 }
 
 async function onReady(guild) {
   const d = get(guild.id);
   if (d.pannello || !guild.channels.cache.has(d.canale)) return;
-  try { await rimettiPannello(guild); console.log('🏪 Pannello richieste attività pubblicato'); } catch (e) { console.warn(`[attivita] ${e.message}`); }
+  try { await rimettiPannello(guild); console.log(`${emoji} Pannello richieste ${cosa} pubblicato`); } catch (e) { console.warn(`[${chiave}] ${e.message}`); }
 }
 
-module.exports = {
+const re = new RegExp(`^${P}m?:`);
+return {
   init(c, s) { cfg = c; save = s; },
-  command: new SlashCommandBuilder().setName('attivita').setDescription('Ripubblica il pannello delle richieste di attività')
-    .addChannelOption((o) => o.setName('canale').setDescription('In quale canale (vuoto = canale attività)'))
+  command: new SlashCommandBuilder().setName(comando).setDescription(`Ripubblica il pannello delle richieste ${cosa}`)
+    .addChannelOption((x) => x.setName('canale').setDescription('In quale canale (vuoto = canale predefinito)'))
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild).setDMPermission(false).toJSON(),
-  isAttivita: (i) => (i.isChatInputCommand() && i.commandName === 'attivita') || /^attm?:/.test(i.customId ?? ''),
+  is: (i) => (i.isChatInputCommand() && i.commandName === comando) || re.test(i.customId ?? ''),
   handle, onReady,
   _pannello: pannello, _modal: modalRichiesta, _get: get,
 };
+}
+
+// ---------- RICHIESTE ATTIVITÀ (minimo 5 player) ----------
+const attivita = creaRichieste({
+  chiave: 'attivita', P: 'att', CANALE: '1575154048309526598', MINIMO: 5, comando: 'attivita',
+  cosa: 'attività', emoji: '🏪', pulsante: 'Richiedi un\'attività',
+  titolo: '🏪 RICHIESTA ATTIVITÀ – VICE LIFE RP 🌴',
+  spiegazione: 'Vuoi aprire un\'**attività** in città? (locale, negozio, officina, azienda...)',
+  campoNome: 'Nome dell\'attività', nomePlaceholder: 'Es. Vice Burger',
+  campoTipo: 'Tipo di attività', tipoPlaceholder: 'Es. Ristorante, officina, negozio, night club...',
+  descrPlaceholder: 'Cosa fa l\'attività, dove si trova, orari, ruoli dei membri...',
+});
+
+// ---------- RICHIESTE FAZIONI (minimo 7 player) ----------
+const fazioni = creaRichieste({
+  chiave: 'richiesteFazioni', P: 'faz', CANALE: '1575154070694658149', MINIMO: 7, comando: 'fazioni',
+  cosa: 'fazione', emoji: '⚔️', pulsante: 'Richiedi una fazione',
+  titolo: '⚔️ RICHIESTA FAZIONE – VICE LIFE RP 🌴',
+  spiegazione: 'Vuoi creare una **fazione** in città? (legale o illegale: gang, famiglia, organizzazione, corpo di polizia...)\nPrima leggi bene il **regolamento delle fazioni**!',
+  campoNome: 'Nome della fazione', nomePlaceholder: 'Es. Los Vagos',
+  campoTipo: 'Tipo di fazione (legale o illegale)', tipoPlaceholder: 'Es. Illegale – gang di quartiere',
+  descrPlaceholder: 'Storia della fazione, obiettivi, territorio, gerarchia, capo e vice...',
+});
+
+module.exports = { creaRichieste, attivita, fazioni };
