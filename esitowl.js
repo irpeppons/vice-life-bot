@@ -14,6 +14,8 @@ const {
 const EPH = MessageFlags.Ephemeral;
 const RUOLI_ESAMINATORI = ['1575144400399499304', '1575144537926672455']; // solo loro possono usarlo
 const RUOLO_WL_PASSATA = '1575145424963239998';
+const RUOLI_WL_PASSATA = ['1575145424963239998', '1575145370600611870']; // dati quando passa la WL
+const RUOLO_DA_TOGLIERE = '1575145467061477586'; // tolto quando passa la WL (in attesa whitelist)
 const ROSA = '#ff2d95';
 let cfg; let save;
 
@@ -50,7 +52,7 @@ function pannello(guild, avviso = '') {
     embeds: [new EmbedBuilder().setColor(ROSA).setTitle('🎓 Esito Whitelist – VICE LIFE RP 🌴')
       .setDescription(
         'Premi un pulsante e **cerca il player** nella lista (basta scrivere le prime lettere).\n\n' +
-        `✅ **WL passata** → il bot gli dà <@&${RUOLO_WL_PASSATA}> e lo avvisa in privato\n` +
+        `✅ **WL passata** → il bot gli dà ${RUOLI_WL_PASSATA.map((r) => `<@&${r}>`).join(' ')}, toglie <@&${RUOLO_DA_TOGLIERE}> e lo avvisa in privato\n` +
         '❌ **WL non superata** → scrivi **fra quante ore** può riprovarla e il bot glielo dice in privato\n\n' +
         `**Ultimi esiti:**\n${ultimi}` + (avviso ? `\n\n${avviso}` : ''),
       )
@@ -105,6 +107,16 @@ const modalNonSuperata = () => new ModalBuilder().setCustomId('ewm:no').setTitle
   testo('motivo', 'Motivo (facoltativo)', { style: TextInputStyle.Paragraph, max: 1000, required: false, placeholder: 'Es. Ripassa i termini RP: metagaming e powergaming' }),
 );
 
+// Manda l'esito come messaggio normale nel canale (lo vedono tutti quelli del canale)
+async function pubblicaEsito(i, embed) {
+  try {
+    await i.channel.send({ embeds: [embed], allowedMentions: { parse: [] } });
+    await i.deleteReply().catch(() => {});
+  } catch {
+    await i.editReply({ embeds: [embed] }); // se non posso scrivere nel canale, lo mostro solo a chi l'ha fatto
+  }
+}
+
 async function registraEsito(i, esito) {
   const g = i.guild; const d = get(g.id);
   const v = (k) => i.fields.getTextInputValue(k).trim();
@@ -115,9 +127,17 @@ async function registraEsito(i, esito) {
   if (player.user.bot) return i.editReply('❌ Hai scelto un bot.');
 
   if (esito === 'ok') {
-    let ruolo = '✅ Ruolo dato';
-    await player.roles.add(RUOLO_WL_PASSATA, `WL passata, esaminato da ${i.user.username}`)
-      .catch((e) => { ruolo = `⚠️ Non sono riuscito a dare il ruolo: ${e.message}`; });
+    const motivoLog = `WL passata, esaminato da ${i.user.username}`;
+    const ruoli = [];
+    const daDare = RUOLI_WL_PASSATA.filter((r) => g.roles.cache.has(r) && !player.roles.cache.has(r));
+    await player.roles.add(daDare, motivoLog)
+      .then(() => ruoli.push(`➕ Dati: ${RUOLI_WL_PASSATA.map((r) => `<@&${r}>`).join(' ')}`))
+      .catch((e) => ruoli.push(`⚠️ Non sono riuscito a dare i ruoli: ${e.message}`));
+    if (player.roles.cache.has(RUOLO_DA_TOGLIERE)) {
+      await player.roles.remove(RUOLO_DA_TOGLIERE, motivoLog)
+        .then(() => ruoli.push(`➖ Tolto: <@&${RUOLO_DA_TOGLIERE}>`))
+        .catch((e) => ruoli.push(`⚠️ Non sono riuscito a togliere <@&${RUOLO_DA_TOGLIERE}>: ${e.message}`));
+    }
     const note = v('note');
     const dm = await player.send(
       `🎉 **Complimenti!** Hai **superato la whitelist** di **VICE LIFE RP 🌴**!\nOra sei un cittadino: benvenuto in città! 🏙️${note ? `\n\n💬 ${note}` : ''}`,
@@ -127,7 +147,17 @@ async function registraEsito(i, esito) {
     d.storico = d.storico.slice(-50);
     save();
     await aggiornaPannelloFisso(g);
-    return i.editReply(`✅ **${player.user.username}** ha passato la WL!\n${ruolo} <@&${RUOLO_WL_PASSATA}>\n${dm ? '📩 Avvisato in privato.' : '⚠️ Non riesco a scrivergli in privato (DM chiusi).'}`);
+    const e = new EmbedBuilder().setColor('#2ecc71').setTitle('✅ WHITELIST PASSATA')
+      .setDescription(`<@${player.id}> ha **superato la whitelist**! Benvenuto in città 🌴`)
+      .addFields(
+        { name: '👤 Player', value: `<@${player.id}> (${player.user.username})`, inline: true },
+        { name: '🎓 Esaminatore', value: `<@${i.user.id}>`, inline: true },
+        { name: '🎭 Ruoli', value: ruoli.join('\n') || 'Nessuna modifica' },
+        { name: '📩 Messaggio privato', value: dm ? 'Inviato' : '⚠️ Non inviato (DM chiusi)', inline: true },
+      )
+      .setThumbnail(player.user.displayAvatarURL({ size: 256 })).setFooter({ text: 'VICE LIFE RP 🌴 • Esito WL' }).setTimestamp();
+    if (note) e.addFields({ name: '💬 Messaggio', value: note.slice(0, 1024) });
+    return pubblicaEsito(i, e);
   }
 
   const ore = parseInt(v('ore'), 10);
@@ -144,7 +174,17 @@ async function registraEsito(i, esito) {
   d.storico = d.storico.slice(-50);
   save();
   await aggiornaPannelloFisso(g);
-  return i.editReply(`❌ **${player.user.username}** non ha superato la WL. Potrà riprovare tra **${ore} ore** (<t:${Math.floor(quando / 1000)}:R>).\n${dm ? '📩 Avvisato in privato.' : '⚠️ Non riesco a scrivergli in privato (DM chiusi): avvisalo tu.'}`);
+  const e = new EmbedBuilder().setColor('#e74c3c').setTitle('❌ WHITELIST NON SUPERATA')
+    .setDescription(`<@${player.id}> non ha superato la whitelist.`)
+    .addFields(
+      { name: '👤 Player', value: `<@${player.id}> (${player.user.username})`, inline: true },
+      { name: '🎓 Esaminatore', value: `<@${i.user.id}>`, inline: true },
+      { name: '⏰ Può riprovare', value: `tra **${ore} ${ore === 1 ? 'ora' : 'ore'}** (<t:${Math.floor(quando / 1000)}:f>)` },
+      { name: '📩 Messaggio privato', value: dm ? 'Inviato' : '⚠️ Non inviato (DM chiusi): avvisalo tu', inline: true },
+    )
+    .setThumbnail(player.user.displayAvatarURL({ size: 256 })).setFooter({ text: 'VICE LIFE RP 🌴 • Esito WL' }).setTimestamp();
+  if (motivo) e.addFields({ name: '📝 Motivo', value: motivo.slice(0, 1024) });
+  return pubblicaEsito(i, e);
 }
 
 async function handle(i) {
