@@ -12,6 +12,8 @@ const { ChannelType, PermissionFlagsBits } = require('discord.js');
 
 const CANALE_ATTESA = '1575152185891627168';
 const AUDIO = path.join(__dirname, 'audio', 'attesa-assistenza.ogg');
+const ATTESA_PRIMA_MS = 2500; // pausa prima dell'audio
+const SENZA_SUONI = [PermissionFlagsBits.UseSoundboard, PermissionFlagsBits.UseExternalSounds];
 let cfg; let save;
 let voice; // @discordjs/voice (caricato solo quando serve)
 
@@ -47,8 +49,9 @@ async function riproduci(member) {
       parent: attesa.parentId ?? null,
       userLimit: 2,
       permissionOverwrites: [
-        { id: g.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect] },
-        { id: member.id, allow: perms },
+        // niente soundboard e suoni d'ingresso personalizzati: si sente solo l'audio del bot
+        { id: g.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect, ...SENZA_SUONI] },
+        { id: member.id, allow: perms, deny: SENZA_SUONI },
         { id: g.members.me.id, allow: [...perms, PermissionFlagsBits.MoveMembers, PermissionFlagsBits.ManageChannels] },
       ],
     });
@@ -59,7 +62,8 @@ async function riproduci(member) {
     await v.entersState(conn, v.VoiceConnectionStatus.Ready, 15_000);
     if (member.voice.channelId !== CANALE_ATTESA) return; // è uscito nel frattempo
     await member.voice.setChannel(temp, 'Audio sala d\'attesa');
-    await new Promise((r) => setTimeout(r, 700));
+    // aspetta che finisca il suono di Discord dello spostamento, così l'audio si sente bene
+    await new Promise((r) => setTimeout(r, ATTESA_PRIMA_MS));
 
     // 3) audio
     const player = v.createAudioPlayer();
