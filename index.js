@@ -11,6 +11,7 @@
 //   /wl-info        -> info per la whitelist conoscitiva (pubblicate da sole nel canale WL)
 //   /richiesta-wl   -> pannello richieste whitelist (canale privato con lo staff)
 //   /esito-wl       -> WL passata / non superata (solo esaminatori)
+//   /storie-pg      -> storie dei personaggi (accettate dagli esaminatori)
 // ================================================
 require('dotenv').config();
 const fs = require('fs');
@@ -50,6 +51,8 @@ const richiestaWl = require('./richiestawl');
 richiestaWl.init(cfg, save);
 const esitoWl = require('./esitowl');
 esitoWl.init(cfg, save);
+const storie = require('./storie');
+storie.init(cfg, save);
 
 // ---------- statistiche ----------
 const STATS = [
@@ -447,7 +450,7 @@ const commands = [
     .setDescription('Scegli i ruoli che ricevono in automatico i nuovi membri')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
     .setDMPermission(false),
-].map((c) => c.toJSON()).concat(tickets.command, idfissi.commands, community.commands, statoServer.command, wl.command, richiestaWl.command, esitoWl.command);
+].map((c) => c.toJSON()).concat(tickets.command, idfissi.commands, community.commands, statoServer.command, wl.command, richiestaWl.command, esitoWl.command, storie.command);
 
 // ---------- client ----------
 const client = new Client({
@@ -483,6 +486,7 @@ client.once('clientReady', async () => {
     await wl.onReady(g).catch(() => {});
     await richiestaWl.onReady(g)?.catch?.(() => {});
     await esitoWl.onReady(g).catch(() => {});
+    await storie.onReady(g).catch(() => {});
     if (cfg(g.id).stats) await updateStats(g);
   }
   setInterval(() => client.guilds.cache.forEach((g) => cfg(g.id).stats && scheduleStats(g)), UPDATE_EVERY_MS);
@@ -516,6 +520,8 @@ client.on('interactionCreate', async (i) => {
   try {
     // Sistema ticket
     if (tickets.isTicket(i)) return await tickets.handle(i);
+    // Storie dei personaggi
+    if (storie.isStoria(i)) return await storie.handle(i);
     // Esito whitelist
     if (esitoWl.isEsito(i)) return await esitoWl.handle(i);
     // Richieste whitelist
