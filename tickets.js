@@ -33,7 +33,19 @@ const DEFAULT = {
 };
 
 // ---------- utilità ----------
-const get = (gid) => (cfg(gid).tickets ??= structuredClone(DEFAULT));
+// Ruoli staff che vedono TUTTI i ticket (oltre a quelli scelti per ogni tipo)
+const DEFAULT_STAFF = [
+  '1575142910888906862', '1575143071564304454', '1575143178414063649', '1575143272404357200',
+  '1575143396572528722', '1575143684528279654', '1575144009914122242', '1575144054608502915',
+  '1575144091333824512', '1575144154814480496', '1575144207906250842', '1575144231134040104',
+];
+function get(gid) {
+  const t = (cfg(gid).tickets ??= structuredClone(DEFAULT));
+  t.staff ??= [...DEFAULT_STAFF];
+  return t;
+}
+// Tutti i ruoli staff di un tipo: staff generale + ruoli del tipo
+const staffDi = (t, tipo) => [...new Set([...(t.staff ?? []), ...(tipo?.ruoli ?? [])])];
 const isUrl = (s) => /^https?:\/\/\S+$/i.test(s);
 const isEmoji = (s) => /^<a?:\w{2,32}:\d{17,20}>$/.test(s)
   || (s.length <= 16 && /\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(s) && !/[a-z]/i.test(s));
@@ -109,9 +121,11 @@ function adminPanel(guild, warning = '') {
   const tipi = t.tipi.length
     ? t.tipi.map((tp) => `${tipoLabel(tp)} → 📁 ${tp.categoria ? `<#${tp.categoria}>` : '⚠️ *nessuna categoria*'} · 👮 ${tp.ruoli.length ? tp.ruoli.map((r) => `<@&${r}>`).join(' ') : '*nessun ruolo staff*'}`).join('\n')
     : '*Nessun tipo: premi ➕ Aggiungi tipo*';
+  const staffValidi = t.staff.filter((r) => guild.roles.cache.has(r));
   const pub = t.pubblicato ? `📌 Pubblicato in <#${t.pubblicato.canale}> (si aggiorna da solo)` : '📌 *Non ancora pubblicato*';
   const content = (
     `## 🎫 Pannello Ticket – VICE LIFE🌴\n${pub}  •  Modalità: **${t.modalita === 'menu' ? 'Menu a tendina' : 'Pulsanti'}**\n\n` +
+    `👮 **Staff che vede tutti i ticket:** ${staffValidi.length ? staffValidi.map((r) => `<@&${r}>`).join(' ') : '*nessuno*'}\n\n` +
     `**Tipi di ticket:**\n${tipi}\n\n👇 **Anteprima del pannello pubblico:**` +
     (warning ? `\n\n${warning}` : '')
   ).slice(0, 2000);
@@ -129,14 +143,18 @@ function adminPanel(guild, warning = '') {
       new ButtonBuilder().setCustomId('tk:stile').setLabel('Colore & Immagini').setEmoji('🎨').setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId('tk:add').setLabel('Aggiungi tipo').setEmoji('➕').setStyle(ButtonStyle.Success).setDisabled(t.tipi.length >= 25),
       new ButtonBuilder().setCustomId('tk:mode').setLabel(t.modalita === 'menu' ? 'Usa pulsanti' : 'Usa menu a tendina').setEmoji('🔁').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('tk:aggiorna').setLabel('Aggiorna pubblicato').setEmoji('🔄').setStyle(ButtonStyle.Secondary).setDisabled(!t.pubblicato),
     ),
     new ActionRowBuilder().addComponents(
       new ChannelSelectMenuBuilder().setCustomId('tk:pubblica').setPlaceholder('📢 Pubblica il pannello in un canale...')
         .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement),
     ),
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('tk:aggiorna').setLabel('Aggiorna pannello pubblicato').setEmoji('🔄').setStyle(ButtonStyle.Secondary).setDisabled(!t.pubblicato),
-    ),
+    new ActionRowBuilder().addComponents((() => {
+      const sel = new RoleSelectMenuBuilder().setCustomId('tk:staff')
+        .setPlaceholder('👮 Staff che vede TUTTI i ticket').setMinValues(0).setMaxValues(25);
+      if (staffValidi.length) sel.setDefaultRoles(...staffValidi.slice(0, 25));
+      return sel;
+    })()),
   );
   return { content, embeds: [publicEmbed(guild, t)], components };
 }
@@ -146,7 +164,7 @@ function tipoPanel(guild, tipo, warning = '') {
     `## ${tipoLabel(tipo)} – impostazioni tipo\n` +
     `📝 Descrizione: ${tipo.descrizione || '*nessuna*'}\n` +
     `📁 Categoria dei ticket: ${tipo.categoria ? `<#${tipo.categoria}>` : '⚠️ *nessuna (scegline una qui sotto)*'}\n` +
-    `👮 Staff: ${tipo.ruoli.length ? tipo.ruoli.map((r) => `<@&${r}>`).join(' ') : '*nessuno*'}\n` +
+    `👮 Staff in più solo per questo tipo: ${tipo.ruoli.length ? tipo.ruoli.map((r) => `<@&${r}>`).join(' ') : '*nessuno* (lo staff generale lo vede comunque)'}\n` +
     `🎨 Colore pulsante: ${STILI_NOME[tipo.stile] ?? STILI_NOME.Primary}\n\n` +
     `💬 **Messaggio dentro il ticket:**\n${tipo.messaggio || '*nessuno*'}` +
     (warning ? `\n\n${warning}` : '')
@@ -156,7 +174,7 @@ function tipoPanel(guild, tipo, warning = '') {
     .setPlaceholder('📁 Categoria dove vanno questi ticket').addChannelTypes(ChannelType.GuildCategory);
   if (tipo.categoria && guild.channels.cache.has(tipo.categoria)) cat.setDefaultChannels(tipo.categoria);
   const ruoli = new RoleSelectMenuBuilder().setCustomId(`tk:ruoli:${tipo.id}`)
-    .setPlaceholder('👮 Ruoli staff che vedono questi ticket').setMinValues(0).setMaxValues(10);
+    .setPlaceholder('👮 Staff in più solo per questo tipo').setMinValues(0).setMaxValues(25);
   const validRoles = tipo.ruoli.filter((r) => guild.roles.cache.has(r));
   if (validRoles.length) ruoli.setDefaultRoles(...validRoles);
 
@@ -241,6 +259,8 @@ async function handleAdmin(i) {
       return i.update(adminPanel(g, ok ? '🔄 Pannello pubblicato aggiornato.' : '⚠️ Non trovo più il pannello: ripubblicalo dal menu 📢.'));
     }
 
+    if (b === 'staff') { t.staff = i.values; return done('✅ Staff generale aggiornato: vedrà tutti i ticket.'); }
+
     const tipo = findTipo(t, id);
     if (!tipo) return i.update(adminPanel(g, '⚠️ Tipo non trovato.'));
     if (b === 'cat') { tipo.categoria = i.values[0] ?? null; return done(`✅ I ticket **${tipo.nome}** andranno in <#${tipo.categoria}>.`, tipo); }
@@ -317,7 +337,7 @@ async function openTicket(i, tipoId) {
       { id: g.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
       { id: i.user.id, allow: perms },
       { id: i.client.user.id, allow: [...perms, PermissionFlagsBits.ManageChannels] },
-      ...tipo.ruoli.filter((r) => g.roles.cache.has(r)).map((r) => ({ id: r, allow: perms })),
+      ...staffDi(t, tipo).filter((r) => g.roles.cache.has(r)).map((r) => ({ id: r, allow: perms })),
     ],
   });
 
@@ -330,7 +350,8 @@ async function openTicket(i, tipoId) {
     new ButtonBuilder().setCustomId('tkclaim').setLabel('Prendi in carico').setEmoji('🙋').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId('tkc').setLabel('Chiudi ticket').setEmoji('🔒').setStyle(ButtonStyle.Danger),
   );
-  const staff = tipo.ruoli.map((r) => `<@&${r}>`).join(' ');
+  // Tagga i ruoli del tipo; se non ci sono, tagga lo staff generale
+  const staff = (tipo.ruoli.length ? tipo.ruoli : t.staff).filter((r) => g.roles.cache.has(r)).map((r) => `<@&${r}>`).join(' ');
   await ch.send({ content: `<@${i.user.id}> ${staff}`.trim(), embeds: [embed], components: [row] });
   return i.editReply(`✅ Ticket creato: <#${ch.id}>`);
 }
@@ -348,7 +369,7 @@ async function handlePublic(i) {
   if (!info) return i.reply({ content: '❌ Questo non è un canale ticket.', flags: EPH });
   const tipo = findTipo(get(i.guild.id), info.tipoId);
   const isStaff = i.memberPermissions.has(PermissionFlagsBits.ManageChannels)
-    || (tipo?.ruoli ?? []).some((r) => i.member.roles.cache.has(r));
+    || staffDi(get(i.guild.id), tipo).some((r) => i.member.roles.cache.has(r));
 
   if (a === 'tkclaim') {
     if (!isStaff) return i.reply({ content: '❌ Solo lo staff può prendere in carico il ticket.', flags: EPH });
