@@ -6,6 +6,7 @@
 //   /ticket         -> apre il PANNELLO per creare il sistema ticket
 //   /autoruoli      -> sceglie i ruoli dati in automatico a chi entra
 //   /idfissi, /id   -> numero fisso nel nickname in base all'ordine di ingresso
+//   /annunci, /link, /sondaggi, /giveaway
 // ================================================
 require('dotenv').config();
 const fs = require('fs');
@@ -35,6 +36,8 @@ const idfissi = require('./idfissi');
 idfissi.init(cfg, save);
 const memoria = require('./memoria');
 memoria.init(cfg, save);
+const community = require('./community');
+community.init(cfg, save);
 
 // ---------- statistiche ----------
 const STATS = [
@@ -427,7 +430,7 @@ const commands = [
     .setDescription('Scegli i ruoli che ricevono in automatico i nuovi membri')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
     .setDMPermission(false),
-].map((c) => c.toJSON()).concat(tickets.command, idfissi.commands);
+].map((c) => c.toJSON()).concat(tickets.command, idfissi.commands, community.commands);
 
 // ---------- client ----------
 const client = new Client({
@@ -458,9 +461,11 @@ client.once('clientReady', async () => {
     memoria.salvaTutti(g);
     await idfissi.onReady(g);
     await tickets.onReady(g).catch(() => {});
+    await community.onReady(g).catch(() => {});
     if (cfg(g.id).stats) await updateStats(g);
   }
   setInterval(() => client.guilds.cache.forEach((g) => cfg(g.id).stats && scheduleStats(g)), UPDATE_EVERY_MS);
+  community.avviaTimer(client); // scadenze di sondaggi e giveaway
 });
 
 client.on('guildCreate', (g) => nascondiMessaggioIngresso(g));
@@ -487,6 +492,8 @@ client.on('interactionCreate', async (i) => {
   try {
     // Sistema ticket
     if (tickets.isTicket(i)) return await tickets.handle(i);
+    // Annunci, link, sondaggi, giveaway
+    if (community.isCommunity(i)) return await community.handle(i);
     // ID fissi
     if (idfissi.isId(i)) return await idfissi.handle(i);
 
