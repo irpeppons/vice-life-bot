@@ -153,8 +153,12 @@ function adminPanel(guild, warning = '') {
   const components = [];
   if (t.tipi.length) {
     components.push(new ActionRowBuilder().addComponents(
-      new StringSelectMenuBuilder().setCustomId('tk:tipo').setPlaceholder('⚙️ Configura un tipo (categoria, staff, testi...)')
-        .addOptions(t.tipi.map((tp) => ({ label: `Configura: ${tp.nome}`.slice(0, 100), value: tp.id, ...(tp.emoji ? { emoji: tp.emoji } : {}) }))),
+      new StringSelectMenuBuilder().setCustomId('tk:tipo').setPlaceholder('✏️ Modifica un tipo (nome, emoji, categoria, staff...)')
+        .addOptions(t.tipi.map((tp) => ({ label: `Modifica: ${tp.nome}`.slice(0, 100), value: tp.id, ...(tp.emoji ? { emoji: tp.emoji } : {}) }))),
+    ));
+    components.push(new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder().setCustomId('tk:elimina').setPlaceholder('🗑️ Elimina un tipo di ticket')
+        .addOptions(t.tipi.map((tp) => ({ label: `Elimina: ${tp.nome}`.slice(0, 100), value: tp.id, ...(tp.emoji ? { emoji: tp.emoji } : {}) }))),
     ));
   }
   components.push(
@@ -212,6 +216,18 @@ function tipoPanel(guild, tipo, warning = '') {
     ],
   };
 }
+
+// Conferma prima di eliminare un tipo
+const confermaElimina = (tipo) => ({
+  content: `## 🗑️ Eliminare ${tipoLabel(tipo)}?\n` +
+    'Il pulsante/opzione sparirà dal pannello pubblico.\n' +
+    '*I ticket già aperti e la categoria di Discord NON vengono cancellati.*',
+  embeds: [], files: [], attachments: [],
+  components: [new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`tk:delok:${tipo.id}`).setLabel('Sì, elimina').setEmoji('🗑️').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId('tk:back').setLabel('Annulla').setEmoji('⬅️').setStyle(ButtonStyle.Secondary),
+  )],
+});
 
 const modalTesti = (t) => new ModalBuilder().setCustomId('tkm:testi').setTitle('✏️ Testi del pannello').addComponents(
   input('titolo', 'Titolo', t.titolo),
@@ -279,6 +295,10 @@ async function handleAdmin(i) {
       return i.update(adminPanel(g, ok ? '🔄 Pannello pubblicato aggiornato.' : '⚠️ Non trovo più il pannello: ripubblicalo dal menu 📢.'));
     }
 
+    if (b === 'elimina') {
+      const tipo = findTipo(t, i.values[0]);
+      return i.update(tipo ? confermaElimina(tipo) : adminPanel(g, '⚠️ Tipo non trovato.'));
+    }
     if (b === 'staff') { t.staff = i.values; return done('✅ Staff generale aggiornato: vedrà tutti i ticket.'); }
 
     const tipo = findTipo(t, id);
@@ -290,7 +310,8 @@ async function handleAdmin(i) {
       tipo.stile = STILI[(STILI.indexOf(tipo.stile) + 1) % STILI.length];
       return done(`🎨 Colore pulsante: ${STILI_NOME[tipo.stile]}`, tipo);
     }
-    if (b === 'del') {
+    if (b === 'del') return i.update(confermaElimina(tipo));
+    if (b === 'delok') {
       t.tipi = t.tipi.filter((x) => x.id !== tipo.id);
       return done(`🗑️ Tipo **${tipo.nome}** eliminato.`);
     }
