@@ -434,8 +434,8 @@ const commands = [
 
 // ---------- client ----------
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
-  partials: [Partials.GuildMember],
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessageReactions],
+  partials: [Partials.GuildMember, Partials.Message, Partials.Channel, Partials.Reaction, Partials.User],
 });
 
 client.once('clientReady', async () => {
@@ -469,6 +469,7 @@ client.once('clientReady', async () => {
 });
 
 client.on('guildCreate', (g) => nascondiMessaggioIngresso(g));
+client.on('messageReactionAdd', (reaction, user) => community.onReaction(reaction, user));
 client.on('guildMemberAdd', async (member) => {
   console.log(`👋 Nuovo membro: ${member.user.username}`);
   const vecchioNick = await memoria.ripristina(member);

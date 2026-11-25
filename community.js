@@ -447,7 +447,7 @@ async function inviaSpoiler(i) {
   const ping = [opz.menzione, opz.ruolo ? `<@&${opz.ruolo}>` : ''].filter(Boolean).join(' ');
   // Emoji fissa + obiettivo interazioni, sempre in fondo allo spoiler
   const emoji = i.guild.emojis.cache.get(EMOJI_SPOILER) ?? await i.guild.emojis.fetch(EMOJI_SPOILER).catch(() => null);
-  const fondo = `${emoji ? `${emoji}\n` : ''}**Arriviamo a 10 interazioni per il prossimo spoiler!**`;
+  const fondo = `${emoji ? `${emoji}\n` : ''}**Arriviamo a ${opz.obiettivo} interazioni per il prossimo spoiler!**`;
   const testo = [v('titolo') ? `## ${v('titolo')}` : '', v('descrizione'), ping, `\n${fondo}`].filter(Boolean).join('\n').slice(0, 2000);
   // Il prefisso SPOILER_ fa apparire l'immagine sfocata finché non ci premi sopra
   const files = opz.immagini.map((a, n) => new AttachmentBuilder(a.url, { name: `SPOILER_${n + 1}_${a.name}`.slice(0, 100) }).setSpoiler(true));
@@ -457,6 +457,9 @@ async function inviaSpoiler(i) {
       content: testo || undefined, files,
       allowedMentions: { parse: opz.menzione ? ['everyone'] : [], roles: opz.ruolo ? [opz.ruolo] : [] },
     });
+    // Salva lo spoiler per controllare quando arriva all'obiettivo di interazioni
+    (cfg(i.guild.id).spoiler ??= {})[msg.id] = { canale: ch.id, obiettivo: opz.obiettivo, raggiunto: false, titolo: v('titolo') };
+    save();
     // Reazioni automatiche del bot, così i player ci cliccano sopra
     await msg.react('✅').catch(() => {});
     if (emoji) await msg.react(emoji).catch(() => {});
@@ -464,6 +467,31 @@ async function inviaSpoiler(i) {
   } catch (err) {
     return i.editReply(`❌ Non riesco a pubblicare lo spoiler in <#${opz.canale}>: ${err.message}`);
   }
+}
+
+// Quando uno spoiler arriva all'obiettivo di interazioni -> annuncio automatico
+async function onReaction(reaction, user) {
+  if (user.bot || !reaction.message.guildId) return;
+  const sp = cfg(reaction.message.guildId).spoiler?.[reaction.message.id];
+  if (!sp || sp.raggiunto) return;
+  try {
+    if (reaction.partial) await reaction.fetch();
+    const msg = reaction.message.partial ? await reaction.message.fetch() : reaction.message;
+    // Conta le persone diverse che hanno reagito (bot esclusi)
+    const persone = new Set();
+    for (const r of msg.reactions.cache.values()) {
+      (await r.users.fetch()).forEach((u) => { if (!u.bot) persone.add(u.id); });
+    }
+    if (persone.size < sp.obiettivo || sp.raggiunto) return;
+    sp.raggiunto = true;
+    save();
+    const e = new EmbedBuilder().setColor(ROSA).setTitle('🎉 OBIETTIVO RAGGIUNTO!')
+      .setDescription(`Siamo arrivati a **${persone.size} interazioni** su questo spoiler! 🔥\n\n🙈 **A breve il prossimo spoiler...**\nRestate sintonizzati! 🌴`)
+      .setFooter({ text: 'VICE LIFE RP 🌴' }).setTimestamp();
+    const files = immagine(e, 'vicelife');
+    await msg.reply({ embeds: [e], files, allowedMentions: { repliedUser: false } });
+    console.log(`🙈 Spoiler ${msg.id}: obiettivo di ${sp.obiettivo} interazioni raggiunto`);
+  } catch (e) { console.warn(`[spoiler] ${e.message}`); }
 }
 
 // ---------- controllo scadenze (ogni 20 secondi) ----------
@@ -504,7 +532,8 @@ const commands = [
     .addAttachmentOption((o) => o.setName('immagine3').setDescription('Terza immagine (facoltativa)'))
     .addStringOption((o) => o.setName('menzione').setDescription('Chi taggare').addChoices(
       { name: 'Nessuno', value: 'nessuno' }, { name: '@everyone', value: '@everyone' }, { name: '@here', value: '@here' }))
-    .addRoleOption((o) => o.setName('ruolo').setDescription('Tagga anche un ruolo (facoltativo)')),
+    .addRoleOption((o) => o.setName('ruolo').setDescription('Tagga anche un ruolo (facoltativo)'))
+    .addIntegerOption((o) => o.setName('obiettivo').setDescription('Quante interazioni servono per il prossimo spoiler (default 10)').setMinValue(1).setMaxValue(10000)),
 ].map((c) => c.toJSON());
 
 const NOMI = ['annunci', 'link', 'link-ds', 'sondaggi', 'giveaway', 'spoiler'];
@@ -529,6 +558,7 @@ async function handle(i) {
       inAttesa.set(`sp:${i.user.id}`, {
         canale, immagini: immagini.map((a) => ({ url: a.url, name: a.name })),
         menzione: m && m !== 'nessuno' ? m : '', ruolo: i.options.getRole('ruolo')?.id,
+        obiettivo: i.options.getInteger('obiettivo') ?? 10,
       });
       return i.showModal(modalSpoiler());
     }
@@ -557,6 +587,7 @@ module.exports = {
     setInterval(() => controllaScadenze(client), 20 * 1000);
     controllaScadenze(client);
   },
+  onReaction,
   onReady: async (guild) => { await aggiornaLink(guild, 'ln'); await aggiornaLink(guild, 'ld'); },
   // per i test
   _durata: durata, _sondaggioMessaggio: sondaggioMessaggio, _giveawayMessaggio: giveawayMessaggio, _linkPannello: linkPannello,
