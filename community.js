@@ -19,6 +19,7 @@ const BANNERS = {
   vicelife: 'banner-vicelife.jpg', // VICE LIFE RP
   discord: 'banner-discord.jpg',   // VICE LIFE RP DISCORD
   ticket: 'banner-ticket.jpg',     // VICE LIFE RP TICKET
+  sito: 'banner-sito.jpg',         // sito web VICE LIFE RP
 };
 const ROSA = '#ff2d95';
 let cfg; let save;
@@ -65,7 +66,7 @@ const inAttesa = new Map(); // utente -> opzioni del comando
 const modalAnnuncio = () => new ModalBuilder().setCustomId('anm').setTitle('📢 Nuovo annuncio').addComponents(
   input('titolo', 'Titolo', { placeholder: '📢 AGGIORNAMENTO SERVER' }),
   input('testo', 'Testo (puoi andare a capo)', { style: TextInputStyle.Paragraph, max: 4000, required: true }),
-  input('immagine', 'Immagine: vicelife / discord / link / vuoto', { value: 'vicelife', max: 1000 }),
+  input('immagine', 'Immagine: vicelife / discord / sito / link', { value: 'vicelife', max: 1000 }),
   input('colore', 'Colore (HEX)', { value: ROSA, max: 7 }),
   input('footer', 'Footer (riga in basso)', { value: 'VICE LIFE RP 🌴 • Staff', max: 1024 }),
 );
@@ -110,6 +111,14 @@ const PANNELLI = {
       titolo: '💬 Entra nel Discord di VICE LIFE RP 🌴',
       descrizione: 'Unisciti alla community di **VICE LIFE RP**!\nPremi il pulsante qui sotto per entrare nel nostro Discord 👇',
       footer: 'VICE LIFE RP 🌴', colore: '#3aa0ff', immagine: 'discord', links: [], pubblicato: null,
+    },
+  },
+  lw: {
+    chiave: 'sitoweb', comando: '/sito-web', nome: '🌐 Pannello Sito Web',
+    def: {
+      titolo: '🌐 Sito ufficiale VICE LIFE RP 🌴',
+      descrizione: '**La tua città, la tua storia, la tua nuova vita.**\n\nSul nostro sito trovi regole, fazioni, lavori, staff e tutte le novità del server 👇',
+      footer: 'VICE LIFE RP 🌴', colore: ROSA, immagine: 'sito', links: [], pubblicato: null,
     },
   },
 };
@@ -178,9 +187,9 @@ function linkPannello(guild, p, avviso = '') {
 }
 
 const modalLink = (p, x) => new ModalBuilder().setCustomId(x ? `${p}m:link:${x.id}` : `${p}m:link`).setTitle(x ? '✏️ Modifica link' : '➕ Nuovo link').addComponents(
-  input('nome', 'Nome del pulsante (es. Entra nel Discord)', { value: x?.nome ?? (p === 'ld' ? 'Entra nel Discord' : ''), max: 80, required: true }),
-  input('url', 'Link (deve iniziare con https://)', { value: x?.url, max: 512, required: true, placeholder: 'https://discord.gg/...' }),
-  input('emoji', 'Emoji (facoltativa)', { value: x?.emoji ?? (p === 'ld' ? '💬' : ''), max: 64, placeholder: '💬 📸 🎵 ▶️' }),
+  input('nome', 'Nome del pulsante (es. Visita il sito)', { value: x?.nome ?? ({ ld: 'Entra nel Discord', lw: 'Visita il sito' })[p] ?? '', max: 80, required: true }),
+  input('url', 'Link (deve iniziare con https://)', { value: x?.url, max: 512, required: true, placeholder: p === 'lw' ? 'https://www.vicelife...' : 'https://discord.gg/...' }),
+  input('emoji', 'Emoji (facoltativa)', { value: x?.emoji ?? ({ ld: '💬', lw: '🌐' })[p] ?? '', max: 64, placeholder: '💬 📸 🎵 ▶️ 🌐' }),
 );
 const modalLinkTesti = (p, l) => new ModalBuilder().setCustomId(`${p}m:testi`).setTitle('✏️ Testi pannello').addComponents(
   input('titolo', 'Titolo', { value: l.titolo }),
@@ -189,7 +198,7 @@ const modalLinkTesti = (p, l) => new ModalBuilder().setCustomId(`${p}m:testi`).s
 );
 const modalLinkStile = (p, l) => new ModalBuilder().setCustomId(`${p}m:stile`).setTitle('🎨 Colore & Banner').addComponents(
   input('colore', 'Colore (HEX)', { value: l.colore, max: 7 }),
-  input('immagine', 'Banner: discord / vicelife / link / vuoto', { value: l.immagine, max: 1000 }),
+  input('immagine', 'Banner: sito / discord / vicelife / link', { value: l.immagine, max: 1000 }),
 );
 
 async function gestisciLink(i) {
@@ -343,7 +352,7 @@ const modalGiveaway = () => new ModalBuilder().setCustomId('gwm').setTitle('🎁
   input('premio', 'Cosa si vince?', { max: 200, required: true, placeholder: 'Auto sportiva in gioco + 50.000$' }),
   input('durata', 'Quando scade? (es. 1g, 12h, 30m, 2g 6h)', { max: 30, required: true, placeholder: '1g' }),
   input('descrizione', 'Descrizione / regole (facoltativa)', { style: TextInputStyle.Paragraph, max: 2000 }),
-  input('immagine', 'Immagine: vicelife / discord / link / vuoto', { value: 'vicelife', max: 1000 }),
+  input('immagine', 'Immagine: vicelife / discord / sito / link', { value: 'vicelife', max: 1000 }),
 );
 
 function giveawayMessaggio(guild, gw) {
@@ -530,6 +539,8 @@ const commands = [
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild).setDMPermission(false),
   new SlashCommandBuilder().setName('link-ds').setDescription('Apri il pannello del link di invito Discord con il banner')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild).setDMPermission(false),
+  new SlashCommandBuilder().setName('sito-web').setDescription('Apri il pannello del link del sito web con il banner')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild).setDMPermission(false),
   conCanale(new SlashCommandBuilder().setName('sondaggi').setDescription('Crea un sondaggio (1 voto per player)'), 'Dove pubblicare il sondaggio'),
   conCanale(new SlashCommandBuilder().setName('giveaway').setDescription('Crea un giveaway con 1 vincitore'), 'Dove pubblicare il giveaway'),
   conCanale(new SlashCommandBuilder().setName('spoiler').setDescription('Pubblica immagini censurate: si preme sopra per vederle'), 'Dove pubblicare lo spoiler')
@@ -542,7 +553,7 @@ const commands = [
     .addIntegerOption((o) => o.setName('obiettivo').setDescription('Quante interazioni servono per il prossimo spoiler (default 10)').setMinValue(1).setMaxValue(10000)),
 ].map((c) => c.toJSON());
 
-const NOMI = ['annunci', 'link', 'link-ds', 'sondaggi', 'giveaway', 'spoiler'];
+const NOMI = ['annunci', 'link', 'link-ds', 'sito-web', 'sondaggi', 'giveaway', 'spoiler'];
 
 async function handle(i) {
   if (i.isChatInputCommand()) {
@@ -554,6 +565,7 @@ async function handle(i) {
     }
     if (i.commandName === 'link') return i.reply({ ...linkPannello(i.guild, 'ln'), flags: EPH });
     if (i.commandName === 'link-ds') return i.reply({ ...linkPannello(i.guild, 'ld'), flags: EPH });
+    if (i.commandName === 'sito-web') return i.reply({ ...linkPannello(i.guild, 'lw'), flags: EPH });
     if (i.commandName === 'sondaggi') { inAttesa.set(`sd:${i.user.id}`, canale); return i.showModal(modalSondaggio()); }
     if (i.commandName === 'spoiler') {
       const immagini = ['immagine', 'immagine2', 'immagine3'].map((k) => i.options.getAttachment(k)).filter(Boolean);
@@ -577,7 +589,7 @@ async function handle(i) {
   if (id === 'spm') return inviaSpoiler(i);
   if (id.startsWith('sd:')) return votaSondaggio(i);
   if (id.startsWith('gw:')) return bottoneGiveaway(i);
-  if (/^(ln|ld)m?:/.test(id)) {
+  if (/^(ln|ld|lw)m?:/.test(id)) {
     if (!staff(i)) return i.reply({ content: '❌ Non hai i permessi.', flags: EPH });
     return gestisciLink(i);
   }
@@ -587,14 +599,14 @@ module.exports = {
   init(cfgFn, saveFn) { cfg = cfgFn; save = saveFn; },
   commands,
   isCommunity: (i) => (i.isChatInputCommand() && NOMI.includes(i.commandName))
-    || /^(anm|sdm|gwm|spm|sd:|gw:|lnm?:|ldm?:)/.test(i.customId ?? ''),
+    || /^(anm|sdm|gwm|spm|sd:|gw:|lnm?:|ldm?:|lwm?:)/.test(i.customId ?? ''),
   handle,
   avviaTimer(client) {
     setInterval(() => controllaScadenze(client), 20 * 1000);
     controllaScadenze(client);
   },
   onReaction,
-  onReady: async (guild) => { await aggiornaLink(guild, 'ln'); await aggiornaLink(guild, 'ld'); },
+  onReady: async (guild) => { for (const p of ['ln', 'ld', 'lw']) await aggiornaLink(guild, p); },
   // per i test
   _durata: durata, _sondaggioMessaggio: sondaggioMessaggio, _giveawayMessaggio: giveawayMessaggio, _linkPannello: linkPannello,
   _modals: () => [modalSpoiler(), modalAnnuncio(), modalSondaggio(), modalGiveaway(), modalLink('ln', null), modalLink('ld', null), modalLinkTesti('ld', PANNELLI.ld.def), modalLinkStile('ld', PANNELLI.ld.def)],
