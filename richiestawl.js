@@ -14,6 +14,7 @@ const {
 
 const EPH = MessageFlags.Ephemeral;
 const CANALE_RICHIESTE = '1575150460023611433';
+const DESTINAZIONE = '1575205578106478602'; // dove arrivano le richieste (canale staff o categoria)
 const ROSA = '#ff2d95';
 const BANNER = 'banner-vicelife.jpg';
 let cfg; let save;
@@ -27,7 +28,12 @@ const DEFAULT = {
   ruoloAccettato: null,
   pubblicato: null,
 };
-const get = (gid) => (cfg(gid).richiestawl ??= structuredClone(DEFAULT));
+function get(gid) {
+  const r = (cfg(gid).richiestawl ??= structuredClone(DEFAULT));
+  if ((r.destVer ?? 1) < 2) { r.destinazione = DESTINAZIONE; r.destVer = 2; save?.(); }
+  r.aperte ??= {};
+  return r;
+}
 const staffRuoli = (gid) => cfg(gid).tickets?.staff ?? [];
 const slug = (s) => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
   .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'player';
@@ -94,10 +100,20 @@ async function creaRichiesta(i) {
   const tag = `richiesta-wl:${i.user.id}`;
   const esistente = g.channels.cache.find((c) => c.topic?.includes(tag));
   if (esistente) return i.reply({ content: `⚠️ Hai già una richiesta aperta: <#${esistente.id}>`, flags: EPH });
+  if (r.aperte[i.user.id]) return i.reply({ content: '⚠️ Hai già una richiesta in attesa: lo staff ti risponderà al più presto.', flags: EPH });
 
   await i.deferReply({ flags: EPH });
+  const dest = g.channels.cache.get(r.destinazione);
+  // Destinazione = canale di testo: la richiesta arriva lì come messaggio con i pulsanti dello staff
+  if (dest && dest.type !== ChannelType.GuildCategory && dest.isTextBased()) {
+    const msg = await dest.send({ embeds: [riepilogo(i, v, eta, 'Lo staff ti contatterà per la **WL conoscitiva**. 🌴')], components: [bottoniStaff(false, i.user.id)] });
+    r.aperte[i.user.id] = msg.id;
+    save();
+    return i.editReply('✅ Richiesta inviata allo staff! Ti contatteremo al più presto per la WL conoscitiva. 🌴');
+  }
   const perms = [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles];
-  const parent = r.categoria && g.channels.cache.get(r.categoria)?.type === ChannelType.GuildCategory ? r.categoria : null;
+  const parent = dest?.type === ChannelType.GuildCategory ? dest.id
+    : (r.categoria && g.channels.cache.get(r.categoria)?.type === ChannelType.GuildCategory ? r.categoria : null);
   const ch = await g.channels.create({
     name: `wl-${slug(i.user.username)}`,
     type: ChannelType.GuildText,
@@ -111,8 +127,14 @@ async function creaRichiesta(i) {
     ],
   });
 
-  const e = new EmbedBuilder().setColor(ROSA).setTitle('📝 Nuova richiesta whitelist')
-    .setDescription(`Richiesta di <@${i.user.id}>\nUno staffer ti contatterà qui per la **WL conoscitiva**. 🌴`)
+  const e = riepilogo(i, v, eta, 'Uno staffer ti contatterà qui per la **WL conoscitiva**. 🌴');
+  await ch.send({ content: `<@${i.user.id}>`, embeds: [e], components: [bottoniStaff()] });
+  return i.editReply(`✅ Richiesta inviata! Ecco il tuo canale: <#${ch.id}>`);
+}
+
+function riepilogo(i, v, eta, frase) {
+  return new EmbedBuilder().setColor(ROSA).setTitle('📝 Nuova richiesta whitelist')
+    .setDescription(`Richiesta di <@${i.user.id}>\n${frase}`)
     .addFields(
       { name: '🏷️ Tag Discord', value: v('tag').slice(0, 1024), inline: true },
       { name: '👤 Nome reale', value: v('nome').slice(0, 1024), inline: true },
@@ -122,31 +144,45 @@ async function creaRichiesta(i) {
     )
     .setThumbnail(i.user.displayAvatarURL({ size: 256 }))
     .setFooter({ text: 'VICE LIFE RP 🌴 • Whitelist' }).setTimestamp();
-  await ch.send({ content: `<@${i.user.id}>`, embeds: [e], components: [bottoniStaff()] });
-  return i.editReply(`✅ Richiesta inviata! Ecco il tuo canale: <#${ch.id}>`);
 }
 
-const bottoniStaff = (fine = false) => new ActionRowBuilder().addComponents(
-  new ButtonBuilder().setCustomId('rw:claim').setLabel('Prendi in carico').setEmoji('🙋').setStyle(ButtonStyle.Primary).setDisabled(fine),
-  new ButtonBuilder().setCustomId('rw:ok').setLabel('Accetta').setEmoji('✅').setStyle(ButtonStyle.Success).setDisabled(fine),
-  new ButtonBuilder().setCustomId('rw:no').setLabel('Rifiuta').setEmoji('❌').setStyle(ButtonStyle.Danger).setDisabled(fine),
-  new ButtonBuilder().setCustomId('rw:chiudi').setLabel('Chiudi').setEmoji('🔒').setStyle(ButtonStyle.Secondary),
-);
+// pid = id del player (solo quando la richiesta è un messaggio nel canale staff)
+const bottoniStaff = (fine = false, pid = '') => {
+  const suf = pid ? `:${pid}` : '';
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`rw:claim${suf}`).setLabel('Prendi in carico').setEmoji('🙋').setStyle(ButtonStyle.Primary).setDisabled(fine),
+    new ButtonBuilder().setCustomId(`rw:ok${suf}`).setLabel('Accetta').setEmoji('✅').setStyle(ButtonStyle.Success).setDisabled(fine),
+    new ButtonBuilder().setCustomId(`rw:no${suf}`).setLabel('Rifiuta').setEmoji('❌').setStyle(ButtonStyle.Danger).setDisabled(fine),
+    new ButtonBuilder().setCustomId(`rw:chiudi${suf}`).setLabel(pid ? 'Elimina' : 'Chiudi').setEmoji(pid ? '🗑️' : '🔒').setStyle(ButtonStyle.Secondary),
+  );
+};
 
 // Cambia il campo "Stato" del messaggio della richiesta
-async function segnaStato(msg, testo, fine) {
+async function segnaStato(msg, testo, fine, pid = '') {
   const e = EmbedBuilder.from(msg.embeds[0]);
   const campi = (e.data.fields ?? []).map((f) => (f.name === '📌 Stato' ? { ...f, value: testo } : f));
   e.setFields(campi);
   if (fine) e.setColor(fine === 'ok' ? '#2ecc71' : '#e74c3c');
-  await msg.edit({ embeds: [e], components: [bottoniStaff(Boolean(fine))] });
+  await msg.edit({ embeds: [e], components: [bottoniStaff(Boolean(fine), pid)] });
+}
+
+// Avvisa il player in privato (serve quando la richiesta è nel canale staff, che lui non vede)
+async function scriviAlPlayer(guild, pid, testo) {
+  const u = await guild.client.users.fetch(pid).catch(() => null);
+  return u?.send(testo).then(() => true).catch(() => false);
 }
 
 async function azioneStaff(i) {
-  const m = i.channel.topic?.match(/richiesta-wl:(\d+)/);
-  if (!m) return i.reply({ content: '❌ Questo non è un canale di richiesta whitelist.', flags: EPH });
-  const player = m[1];
-  const [, b] = i.customId.split(':');
+  const [, b, pid] = i.customId.split(':');
+  const player = pid ?? i.channel.topic?.match(/richiesta-wl:(\d+)/)?.[1];
+  if (!player) return i.reply({ content: '❌ Questa non è una richiesta whitelist.', flags: EPH });
+  const r = get(i.guild.id);
+  if (pid && b === 'chiudi') { // richiesta nel canale staff: elimina solo il messaggio
+    if (!isStaff(i)) return i.reply({ content: '❌ Solo lo staff può farlo.', flags: EPH });
+    delete r.aperte[pid]; save();
+    await i.message.delete().catch(() => {});
+    return i.reply({ content: '🗑️ Richiesta eliminata.', flags: EPH });
+  }
   if (b === 'chiudi') {
     return i.reply({
       content: '🔒 Vuoi chiudere questa richiesta? Il canale verrà eliminato.', flags: EPH,
@@ -163,12 +199,11 @@ async function azioneStaff(i) {
   }
   if (!isStaff(i)) return i.reply({ content: '❌ Solo lo staff può farlo.', flags: EPH });
   if (b === 'claim') {
-    await segnaStato(i.message, `🙋 Presa in carico da <@${i.user.id}>`, null);
+    await segnaStato(i.message, `🙋 Presa in carico da <@${i.user.id}>`, null, pid);
     await i.reply({ content: `🙋 <@${i.user.id}> ha preso in carico la richiesta di <@${player}>.` });
     return;
   }
   if (b === 'ok') {
-    const r = get(i.guild.id);
     let extra = '';
     if (r.ruoloAccettato) {
       const membro = await i.guild.members.fetch(player).catch(() => null);
@@ -176,32 +211,48 @@ async function azioneStaff(i) {
         .then(() => { extra = ` Ti è stato dato il ruolo <@&${r.ruoloAccettato}>.`; })
         .catch(() => { extra = '\n⚠️ Non sono riuscito a dare il ruolo (controlla la posizione del ruolo del bot).'; });
     }
-    await segnaStato(i.message, `✅ Accettata da <@${i.user.id}>`, 'ok');
-    await i.reply({ content: `✅ <@${player}> la tua richiesta whitelist è stata **accettata**! Preparati per la WL conoscitiva. 🌴${extra}`, allowedMentions: { users: [player] } });
+    await segnaStato(i.message, `✅ Accettata da <@${i.user.id}>`, 'ok', pid);
+    const testo = `✅ <@${player}> la tua richiesta whitelist è stata **accettata**! Preparati per la WL conoscitiva. 🌴${extra}`;
+    if (pid) {
+      delete r.aperte[pid]; save();
+      const dm = await scriviAlPlayer(i.guild, pid, `✅ La tua richiesta whitelist su **VICE LIFE RP 🌴** è stata **accettata**! Preparati per la WL conoscitiva.`);
+      return i.reply({ content: `${testo}${dm ? '\n📩 Avvisato in privato.' : '\n⚠️ Non riesco a scrivergli in privato (DM chiusi).'}`, allowedMentions: { users: [] } });
+    }
+    await i.reply({ content: testo, allowedMentions: { users: [player] } });
     return;
   }
   if (b === 'no') {
-    return i.showModal(new ModalBuilder().setCustomId('rwm:rifiuta').setTitle('❌ Rifiuta richiesta').addComponents(
+    return i.showModal(new ModalBuilder().setCustomId(`rwm:rifiuta${pid ? `:${pid}` : ''}`).setTitle('❌ Rifiuta richiesta').addComponents(
       campo('motivo', 'Motivo (facoltativo)', { style: TextInputStyle.Paragraph, max: 1000, required: false }),
     ));
   }
 }
 
 async function rifiuta(i) {
-  const m = i.channel.topic?.match(/richiesta-wl:(\d+)/);
-  if (!m) return i.reply({ content: '❌ Canale non valido.', flags: EPH });
+  const [, , pid] = i.customId.split(':');
+  const player = pid ?? i.channel.topic?.match(/richiesta-wl:(\d+)/)?.[1];
+  if (!player) return i.reply({ content: '❌ Richiesta non valida.', flags: EPH });
   const motivo = i.fields.getTextInputValue('motivo').trim();
-  const richiesta = (await i.channel.messages.fetch({ limit: 20 })).find((x) => x.author.id === i.client.user.id && x.embeds[0]?.title === '📝 Nuova richiesta whitelist');
-  if (richiesta) await segnaStato(richiesta, `❌ Rifiutata da <@${i.user.id}>`, 'no');
-  return i.reply({ content: `❌ <@${m[1]}> la tua richiesta whitelist è stata **rifiutata**.${motivo ? `\n📝 Motivo: ${motivo}` : ''}`, allowedMentions: { users: [m[1]] } });
+  const richiesta = i.message ?? (await i.channel.messages.fetch({ limit: 20 })).find((x) => x.author.id === i.client.user.id && x.embeds[0]?.title === '📝 Nuova richiesta whitelist');
+  if (richiesta) await segnaStato(richiesta, `❌ Rifiutata da <@${i.user.id}>${motivo ? `\n📝 ${motivo}` : ''}`, 'no', pid);
+  const testo = `❌ <@${player}> la tua richiesta whitelist è stata **rifiutata**.${motivo ? `\n📝 Motivo: ${motivo}` : ''}`;
+  if (pid) {
+    const r = get(i.guild.id); delete r.aperte[pid]; save();
+    const dm = await scriviAlPlayer(i.guild, pid, `❌ La tua richiesta whitelist su **VICE LIFE RP 🌴** è stata **rifiutata**.${motivo ? `\n📝 Motivo: ${motivo}` : ''}`);
+    return i.reply({ content: `${testo}${dm ? '\n📩 Avvisato in privato.' : '\n⚠️ Non riesco a scrivergli in privato (DM chiusi).'}`, allowedMentions: { users: [] } });
+  }
+  return i.reply({ content: testo, allowedMentions: { users: [player] } });
 }
 
 // ---------- pannello staff (/richiesta-wl) ----------
 function pannelloStaff(guild, avviso = '') {
   const r = get(guild.id);
-  const cat = new ChannelSelectMenuBuilder().setCustomId('rw:categoria').setPlaceholder('📁 Categoria dove si aprono le richieste')
-    .addChannelTypes(ChannelType.GuildCategory);
-  if (r.categoria && guild.channels.cache.has(r.categoria)) cat.setDefaultChannels(r.categoria);
+  const cat = new ChannelSelectMenuBuilder().setCustomId('rw:categoria').setPlaceholder('📥 Dove arrivano le richieste (canale staff o categoria)')
+    .addChannelTypes(ChannelType.GuildText, ChannelType.GuildCategory);
+  if (r.destinazione && guild.channels.cache.has(r.destinazione)) cat.setDefaultChannels(r.destinazione);
+  const dest = guild.channels.cache.get(r.destinazione);
+  const modo = !dest ? '⚠️ *non trovato*' : dest.type === ChannelType.GuildCategory
+    ? `<#${dest.id}> (categoria: per ogni richiesta si apre un canale privato)` : `<#${dest.id}> (le richieste arrivano qui con i pulsanti per lo staff)`;
   const ruolo = new RoleSelectMenuBuilder().setCustomId('rw:ruolo').setPlaceholder('🎭 Ruolo da dare quando accetti (facoltativo)').setMinValues(0).setMaxValues(1);
   if (r.ruoloAccettato && guild.roles.cache.has(r.ruoloAccettato)) ruolo.setDefaultRoles(r.ruoloAccettato);
   const { embeds, files } = pannelloPubblico(guild, r);
@@ -209,7 +260,7 @@ function pannelloStaff(guild, avviso = '') {
     content: (
       `## 📝 Richieste Whitelist – VICE LIFE🌴\n` +
       `${r.pubblicato ? `📌 Pubblicato in <#${r.pubblicato.canale}> (si aggiorna da solo)` : '📌 *Non ancora pubblicato*'}\n` +
-      `📁 Categoria: ${r.categoria ? `<#${r.categoria}>` : '*nessuna (scegline una qui sotto)*'}\n` +
+      `📥 Le richieste vanno in: ${modo}\n` +
       `🎭 Ruolo quando accetti: ${r.ruoloAccettato ? `<@&${r.ruoloAccettato}>` : '*nessuno*'}\n` +
       `👮 Le richieste le vede lo staff dei ticket (pulsante 👮 Staff in /ticket)` +
       (avviso ? `\n\n${avviso}` : '')
@@ -236,7 +287,7 @@ async function gestioneStaff(i) {
   const g = i.guild; const r = get(g.id);
   const fatto = async (avviso) => { save(); await aggiorna(g); return i.update(pannelloStaff(g, avviso)); };
   if (i.customId === 'rw:testi') return i.showModal(modalTesti(r));
-  if (i.customId === 'rw:categoria') { r.categoria = i.values[0] ?? null; return fatto(`✅ Le richieste si apriranno in <#${r.categoria}>.`); }
+  if (i.customId === 'rw:categoria') { r.destinazione = i.values[0] ?? null; return fatto(`✅ Le richieste andranno in <#${r.destinazione}>.`); }
   if (i.customId === 'rw:ruolo') { r.ruoloAccettato = i.values[0] ?? null; return fatto(r.ruoloAccettato ? `✅ Quando accetti verrà dato <@&${r.ruoloAccettato}>.` : '✅ Nessun ruolo verrà dato.'); }
   if (i.customId === 'rw:pubblica') {
     try { await pubblica(g, i.values[0]); return i.update(pannelloStaff(g, `✅ Pubblicato in <#${i.values[0]}>.`)); } catch (e) { return i.update(pannelloStaff(g, `❌ Non posso scrivere lì: ${e.message}`)); }
@@ -253,8 +304,8 @@ async function handle(i) {
   const id = i.customId;
   if (id === 'rw:apri') return i.showModal(modalRichiesta(i.user));
   if (id === 'rwm:invia') return creaRichiesta(i);
-  if (id === 'rwm:rifiuta') return rifiuta(i);
-  if (['rw:claim', 'rw:ok', 'rw:no', 'rw:chiudi', 'rw:chiudisi'].includes(id)) return azioneStaff(i);
+  if (id.startsWith('rwm:rifiuta')) return rifiuta(i);
+  if (/^rw:(claim|ok|no|chiudi|chiudisi)(:|$)/.test(id)) return azioneStaff(i);
   return gestioneStaff(i);
 }
 
