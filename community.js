@@ -433,7 +433,8 @@ async function bottoneGiveaway(i) {
 //   /spoiler  (immagini censurate: si preme sopra per vederle)
 // ================================================
 const EMOJI_SPOILER = '1575192806618570885';
-const modalSpoiler = () => new ModalBuilder().setCustomId('spm').setTitle('🙈 Spoiler').addComponents(
+const modalSpoiler = (obiettivo = 10) => new ModalBuilder().setCustomId('spm').setTitle('🙈 Spoiler').addComponents(
+  input('obiettivo', 'Obiettivo reazioni (es. 10)', { value: String(obiettivo), max: 5, required: true }),
   input('titolo', 'Titolo', { max: 200, placeholder: '🙈 SPOILER: nuova macchina in arrivo' }),
   input('descrizione', 'Descrizione (puoi andare a capo)', { style: TextInputStyle.Paragraph, max: 1700, placeholder: 'Premi sull\'immagine per scoprirla 👇' }),
 );
@@ -444,10 +445,13 @@ async function inviaSpoiler(i) {
   inAttesa.delete(`sp:${i.user.id}`);
   await i.deferReply({ flags: EPH });
   const v = (k) => i.fields.getTextInputValue(k).trim();
+  const obiettivo = parseInt(v('obiettivo'), 10);
+  if (!(obiettivo >= 1)) return i.editReply('❌ L\'obiettivo deve essere un numero, per esempio `10`.');
+  opz.obiettivo = obiettivo;
   const ping = [opz.menzione, opz.ruolo ? `<@&${opz.ruolo}>` : ''].filter(Boolean).join(' ');
   // Emoji fissa + obiettivo interazioni, sempre in fondo allo spoiler
   const emoji = i.guild.emojis.cache.get(EMOJI_SPOILER) ?? await i.guild.emojis.fetch(EMOJI_SPOILER).catch(() => null);
-  const fondo = `${emoji ? `${emoji}\n` : ''}**Arriviamo a ${opz.obiettivo} interazioni per il prossimo spoiler!**`;
+  const fondo = `${emoji ? `${emoji}\n` : ''}**Arriviamo a ${opz.obiettivo} reazioni per il prossimo spoiler!**`;
   const testo = [v('titolo') ? `## ${v('titolo')}` : '', v('descrizione'), ping, `\n${fondo}`].filter(Boolean).join('\n').slice(0, 2000);
   // Il prefisso SPOILER_ fa apparire l'immagine sfocata finché non ci premi sopra
   const files = opz.immagini.map((a, n) => new AttachmentBuilder(a.url, { name: `SPOILER_${n + 1}_${a.name}`.slice(0, 100) }).setSpoiler(true));
@@ -486,7 +490,7 @@ async function onReaction(reaction, user) {
     sp.raggiunto = true;
     save();
     const e = new EmbedBuilder().setColor(ROSA).setTitle('🎉 OBIETTIVO RAGGIUNTO!')
-      .setDescription(`Siamo arrivati a **${persone.size} interazioni** su questo spoiler! 🔥\n\n🙈 **A breve il prossimo spoiler...**\nRestate sintonizzati! 🌴`)
+      .setDescription(`Siamo arrivati all'obiettivo di **${sp.obiettivo} reazioni** sullo spoiler! 🔥\n\n🙈 **Fra poco uscirà un altro spoiler...**\nRestate sintonizzati! 🌴`)
       .setFooter({ text: 'VICE LIFE RP 🌴' }).setTimestamp();
     const files = immagine(e, 'vicelife');
     await msg.reply({ embeds: [e], files, allowedMentions: { repliedUser: false } });
@@ -560,7 +564,7 @@ async function handle(i) {
         menzione: m && m !== 'nessuno' ? m : '', ruolo: i.options.getRole('ruolo')?.id,
         obiettivo: i.options.getInteger('obiettivo') ?? 10,
       });
-      return i.showModal(modalSpoiler());
+      return i.showModal(modalSpoiler(i.options.getInteger('obiettivo') ?? 10));
     }
     if (i.commandName === 'giveaway') { inAttesa.set(`gw:${i.user.id}`, canale); return i.showModal(modalGiveaway()); }
   }
