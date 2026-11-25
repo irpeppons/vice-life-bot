@@ -214,11 +214,14 @@ function staffPanel(guild, warning = '') {
 }
 
 function tipoPanel(guild, tipo, warning = '') {
+  const staffGen = get(guild.id).staff.filter((r) => guild.roles.cache.has(r));
   const content = (
     `## ${tipoLabel(tipo)} – impostazioni tipo\n` +
     `📝 Descrizione: ${tipo.descrizione || '*nessuna*'}\n` +
     `📁 Categoria dei ticket: ${tipo.categoria ? `<#${tipo.categoria}>` : '⚠️ *nessuna (scegline una qui sotto)*'}\n` +
-    `👮 Staff in più solo per questo tipo: ${tipo.ruoli.length ? tipo.ruoli.map((r) => `<@&${r}>`).join(' ') : '*nessuno* (lo staff generale lo vede comunque)'}\n` +
+    `👮 **Staff che vede questi ticket** (staff generale, si cambia con il pulsante 👮 Staff del pannello):\n` +
+    `${staffGen.length ? staffGen.map((r) => `<@&${r}>`).join(' ') : '*nessuno*'}\n` +
+    `➕ Staff in più solo per questo tipo: ${tipo.ruoli.length ? tipo.ruoli.map((r) => `<@&${r}>`).join(' ') : '*nessuno*'}\n` +
     `🎨 Colore pulsante: ${STILI_NOME[tipo.stile] ?? STILI_NOME.Primary}\n\n` +
     `💬 **Messaggio dentro il ticket:**\n${tipo.messaggio || '*nessuno*'}` +
     (warning ? `\n\n${warning}` : '')
