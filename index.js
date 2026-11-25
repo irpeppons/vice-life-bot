@@ -9,6 +9,7 @@
 //   /annunci, /link, /link-ds, /sondaggi, /giveaway, /spoiler
 //   /stato-server   -> online / offline / manutenzione
 //   /wl-info        -> info per la whitelist conoscitiva (pubblicate da sole nel canale WL)
+//   /richiesta-wl   -> pannello richieste whitelist (canale privato con lo staff)
 // ================================================
 require('dotenv').config();
 const fs = require('fs');
@@ -44,6 +45,8 @@ const statoServer = require('./stato');
 statoServer.init(cfg, save);
 const wl = require('./wl');
 wl.init(cfg, save);
+const richiestaWl = require('./richiestawl');
+richiestaWl.init(cfg, save);
 
 // ---------- statistiche ----------
 const STATS = [
@@ -436,7 +439,7 @@ const commands = [
     .setDescription('Scegli i ruoli che ricevono in automatico i nuovi membri')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
     .setDMPermission(false),
-].map((c) => c.toJSON()).concat(tickets.command, idfissi.commands, community.commands, statoServer.command, wl.command);
+].map((c) => c.toJSON()).concat(tickets.command, idfissi.commands, community.commands, statoServer.command, wl.command, richiestaWl.command);
 
 // ---------- client ----------
 const client = new Client({
@@ -470,6 +473,7 @@ client.once('clientReady', async () => {
     await community.onReady(g).catch(() => {});
     await statoServer.onReady(g)?.catch?.(() => {});
     await wl.onReady(g).catch(() => {});
+    await richiestaWl.onReady(g)?.catch?.(() => {});
     if (cfg(g.id).stats) await updateStats(g);
   }
   setInterval(() => client.guilds.cache.forEach((g) => cfg(g.id).stats && scheduleStats(g)), UPDATE_EVERY_MS);
@@ -501,6 +505,8 @@ client.on('interactionCreate', async (i) => {
   try {
     // Sistema ticket
     if (tickets.isTicket(i)) return await tickets.handle(i);
+    // Richieste whitelist
+    if (richiestaWl.isRichiesta(i)) return await richiestaWl.handle(i);
     // Info whitelist
     if (wl.isWl(i)) return await wl.handle(i);
     // Stato server
